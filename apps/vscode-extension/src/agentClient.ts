@@ -8,7 +8,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { MemoryEvent, MemoryEventInput, Settings } from "@recall/shared-types";
+import {
+  DEFAULT_SETTINGS,
+  type MemoryEvent,
+  type MemoryEventInput,
+  type Settings
+} from "@recall/shared-types";
 
 export interface AgentDiscovery {
   port: number;
@@ -136,5 +141,25 @@ export class AgentClient {
 
   testRedaction(text: string): Promise<{ redacted: string; findings: unknown[] }> {
     return this.request("/v1/redaction/test", { method: "POST", body: JSON.stringify({ text }) });
+  }
+}
+
+// Capture listeners fire far more often than settings change (every save/
+// terminal command vs. an occasional toggle), so they read a synchronous
+// cached snapshot instead of hitting the agent over HTTP on every event.
+// Call refresh() once at startup and again after any pause/resume or
+// settings-update action.
+export class SettingsCache {
+  private current: Settings = DEFAULT_SETTINGS;
+
+  constructor(private readonly client: AgentClient) {}
+
+  get(): Settings {
+    return this.current;
+  }
+
+  async refresh(): Promise<Settings> {
+    this.current = await this.client.getSettings();
+    return this.current;
   }
 }
