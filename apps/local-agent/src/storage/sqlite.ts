@@ -105,8 +105,7 @@ export class SqliteStore {
 
   getSettings(): Settings {
     const row = this.db.prepare("SELECT json FROM settings WHERE id = 'singleton'").get() as
-      | { json: string }
-      | undefined;
+      { json: string } | undefined;
     if (!row) return DEFAULT_SETTINGS;
     return { ...DEFAULT_SETTINGS, ...JSON.parse(row.json) } as Settings;
   }
@@ -143,14 +142,14 @@ export class SqliteStore {
       : this.db
           .prepare("SELECT id, timestamp, action, detail FROM audit_log ORDER BY id DESC LIMIT ?")
           .all(limit);
-    return (
-      rows as { id: number; timestamp: string; action: string; detail: string | null }[]
-    ).map((row) => ({
-      id: row.id,
-      timestamp: row.timestamp,
-      action: row.action,
-      detail: row.detail ? JSON.parse(row.detail) : null
-    }));
+    return (rows as { id: number; timestamp: string; action: string; detail: string | null }[]).map(
+      (row) => ({
+        id: row.id,
+        timestamp: row.timestamp,
+        action: row.action,
+        detail: row.detail ? JSON.parse(row.detail) : null
+      })
+    );
   }
 
   // --- Tombstones (spec §6.4.1: delete propagation without resurrecting deletes) ---

@@ -59,8 +59,8 @@ describe("findSecrets", () => {
     const findings = findSecrets(text);
     // generic-secret-assignment and jwt both match here; only the
     // earliest/longest accepted span should survive, not both.
-    const overlapping = findings.filter(
-      (f, _i, all) => all.some((g) => g !== f && g.index < f.index + f.length && f.index < g.index + g.length)
+    const overlapping = findings.filter((f, _i, all) =>
+      all.some((g) => g !== f && g.index < f.index + f.length && f.index < g.index + g.length)
     );
     expect(overlapping).toHaveLength(0);
   });

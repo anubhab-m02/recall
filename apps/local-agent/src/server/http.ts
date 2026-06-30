@@ -5,11 +5,7 @@
 
 import express, { type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
-import {
-  MemoryEventInputSchema,
-  SettingsSchema,
-  type Settings
-} from "@recall/shared-types";
+import { MemoryEventInputSchema, SettingsSchema, type Settings } from "@recall/shared-types";
 import { tokensMatch } from "../agentLifecycle.js";
 import { testRedaction } from "../redaction/pipeline.js";
 import { ingestEvent } from "../ingestEvent.js";

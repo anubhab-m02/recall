@@ -29,7 +29,10 @@ export interface RunningAgent {
   port: number;
 }
 
-function listen(app: express.Express, startPort: number): Promise<{ server: Server; port: number }> {
+function listen(
+  app: express.Express,
+  startPort: number
+): Promise<{ server: Server; port: number }> {
   return new Promise((resolve, reject) => {
     const tryPort = (port: number, attemptsLeft: number): void => {
       const server = app.listen(port, "127.0.0.1");

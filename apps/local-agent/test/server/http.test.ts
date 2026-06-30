@@ -44,16 +44,12 @@ describe("Local Agent HTTP API", () => {
     });
 
     it("rejects a request with the wrong token", async () => {
-      const res = await request(app)
-        .get("/v1/settings")
-        .set("Authorization", "Bearer wrong-token");
+      const res = await request(app).get("/v1/settings").set("Authorization", "Bearer wrong-token");
       expect(res.status).toBe(401);
     });
 
     it("accepts a request with the correct token", async () => {
-      const res = await request(app)
-        .get("/v1/settings")
-        .set("Authorization", `Bearer ${TOKEN}`);
+      const res = await request(app).get("/v1/settings").set("Authorization", `Bearer ${TOKEN}`);
       expect(res.status).toBe(200);
     });
   });
@@ -115,7 +111,11 @@ describe("Local Agent HTTP API", () => {
               source: "browser",
               type: "page_visit",
               occurredAt: "2026-07-01T00:00:00.000Z",
-              payload: { title: "MDN", canonicalUrl: "https://developer.mozilla.org", dwellMs: 1000 },
+              payload: {
+                title: "MDN",
+                canonicalUrl: "https://developer.mozilla.org",
+                dwellMs: 1000
+              },
               embeddingText: "page_visit | MDN"
             },
             {

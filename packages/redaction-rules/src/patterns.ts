@@ -24,22 +24,13 @@ export const jwtRule = regexRule(
 export const awsAccessKeyRule = regexRule("aws-access-key", /\bAKIA[0-9A-Z]{16}\b/g);
 
 // GitHub personal access / OAuth / app tokens.
-export const githubTokenRule = regexRule(
-  "github-token",
-  /\bgh[pousr]_[A-Za-z0-9]{36,}\b/g
-);
+export const githubTokenRule = regexRule("github-token", /\bgh[pousr]_[A-Za-z0-9]{36,}\b/g);
 
 // Slack tokens (bot/user/app/legacy).
-export const slackTokenRule = regexRule(
-  "slack-token",
-  /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g
-);
+export const slackTokenRule = regexRule("slack-token", /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g);
 
 // Stripe live/test secret + publishable keys.
-export const stripeKeyRule = regexRule(
-  "stripe-key",
-  /\b[sp]k_(live|test)_[A-Za-z0-9]{16,}\b/g
-);
+export const stripeKeyRule = regexRule("stripe-key", /\b[sp]k_(live|test)_[A-Za-z0-9]{16,}\b/g);
 
 // Google API key (always starts AIza, 39 chars total in practice).
 export const googleApiKeyRule = regexRule("google-api-key", /\bAIza[0-9A-Za-z_-]{35,}\b/g);

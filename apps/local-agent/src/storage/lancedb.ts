@@ -103,7 +103,9 @@ export class LanceDbStore {
   static async open(dbPath: string): Promise<LanceDbStore> {
     const connection = await lancedb.connect(dbPath);
     const store = new LanceDbStore(connection);
-    await store.ensureTable(EVENTS_TABLE, [eventToRow(SEED_EVENT) as unknown as Record<string, unknown>]);
+    await store.ensureTable(EVENTS_TABLE, [
+      eventToRow(SEED_EVENT) as unknown as Record<string, unknown>
+    ]);
     await store.ensureTable(LESSONS_TABLE, [
       lessonToRow(SEED_LESSON) as unknown as Record<string, unknown>
     ]);
