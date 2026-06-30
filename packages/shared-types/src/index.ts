@@ -1,4 +1,8 @@
-// Phase 0 stub. Phase 1 implements the full schemas from spec §7
-// (MemoryEvent, Lesson, DailyStandup, WeeklySummary, SkillProfile, etc.).
+// Single source of truth for the data model in spec §7 — shared by the
+// Local Agent, VS Code extension, browser extension, and (future) backend.
 
-export const SHARED_TYPES_PACKAGE_VERSION = "0.1.0";
+export * from "./memoryEvent.js";
+export * from "./lesson.js";
+export * from "./standup.js";
+export * from "./skillProfile.js";
+export * from "./settings.js";

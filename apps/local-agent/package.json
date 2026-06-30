@@ -14,11 +14,20 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@recall/shared-types": "workspace:*",
+    "@lancedb/lancedb": "^0.30.0",
+    "@recall/prompt-templates": "workspace:*",
     "@recall/redaction-rules": "workspace:*",
-    "@recall/prompt-templates": "workspace:*"
+    "@recall/shared-types": "workspace:*",
+    "better-sqlite3": "^12.11.1",
+    "express": "^5.2.1",
+    "ulid": "^3.0.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.6",
+    "@types/supertest": "^7.2.0",
+    "supertest": "^7.2.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }
