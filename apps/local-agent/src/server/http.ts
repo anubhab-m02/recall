@@ -7,7 +7,10 @@ import express, { type NextFunction, type Request, type Response } from "express
 import { z } from "zod";
 import { MemoryEventInputSchema, SettingsSchema, type Settings } from "@recall/shared-types";
 import { tokensMatch } from "../agentLifecycle.js";
+import type { EmbeddingProvider } from "../embeddings/provider.js";
+import type { EmbeddingQueue } from "../embeddings/queue.js";
 import { testRedaction } from "../redaction/pipeline.js";
+import { hybridSearch } from "../retrieval/hybridSearch.js";
 import { ingestEvent } from "../ingestEvent.js";
 import type { SqliteStore } from "../storage/sqlite.js";
 import type { LanceDbStore } from "../storage/lancedb.js";
@@ -20,6 +23,8 @@ export interface HttpServerDeps {
   token: string;
   sqlite: SqliteStore;
   lancedb: LanceDbStore;
+  embeddings: EmbeddingProvider;
+  embeddingQueue: EmbeddingQueue;
 }
 
 function isLoopback(remoteAddress: string | undefined): boolean {
@@ -102,14 +107,10 @@ export function createHttpServer(deps: HttpServerDeps): express.Express {
       return;
     }
     const { q, type, project, since, limit, tenantId } = parsed.data;
-    const results = await deps.lancedb.searchEvents({
-      tenantId: tenantId ?? "local",
-      query: q,
-      type,
-      project,
-      since,
-      limit
-    });
+    const results = await hybridSearch(
+      { tenantId: tenantId ?? "local", query: q, type, project, since, limit },
+      deps
+    );
     res.status(200).json({ results });
   });
 

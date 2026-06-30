@@ -4,9 +4,11 @@ import { join } from "node:path";
 import type { Express } from "express";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { EmbeddingQueue } from "../../src/embeddings/queue.js";
 import { createHttpServer } from "../../src/server/http.js";
 import { SqliteStore } from "../../src/storage/sqlite.js";
 import { LanceDbStore } from "../../src/storage/lancedb.js";
+import { FakeEmbeddingProvider } from "../helpers/fakeEmbeddingProvider.js";
 
 const TOKEN = "test-capability-token";
 
@@ -14,16 +16,22 @@ describe("Local Agent HTTP API", () => {
   let dir: string;
   let sqlite: SqliteStore;
   let lancedb: LanceDbStore;
+  let embeddingQueue: EmbeddingQueue;
   let app: Express;
 
   beforeEach(async () => {
     dir = mkdtempSync(join(tmpdir(), "recall-http-"));
     sqlite = new SqliteStore(":memory:");
     lancedb = await LanceDbStore.open(join(dir, "lancedb"));
-    app = createHttpServer({ token: TOKEN, sqlite, lancedb });
+    const embeddings = new FakeEmbeddingProvider();
+    embeddingQueue = new EmbeddingQueue(embeddings, lancedb);
+    app = createHttpServer({ token: TOKEN, sqlite, lancedb, embeddings, embeddingQueue });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Must stop the queue before closing lancedb — an in-flight embed()
+    // write would otherwise race a closed connection.
+    await embeddingQueue.stop();
     sqlite.close();
     lancedb.close();
     rmSync(dir, { recursive: true, force: true });
@@ -167,7 +175,7 @@ describe("Local Agent HTTP API", () => {
         });
     }
 
-    it("matches on embeddingText and ranks by recency", async () => {
+    it("ranks keyword matches above unrelated events, most recent match first", async () => {
       await ingest({
         occurredAt: "2026-07-01T00:00:00.000Z",
         embeddingText: "terminal_command | exit=1 | jest timeout exceeded"
@@ -187,8 +195,13 @@ describe("Local Agent HTTP API", () => {
         .set("Authorization", `Bearer ${TOKEN}`);
 
       expect(res.status).toBe(200);
-      expect(res.body.results).toHaveLength(2);
+      // Hybrid search ranks rather than hard-filters (spec §11.2), so all
+      // three candidates come back, but the two keyword matches must rank
+      // above the unrelated one, and the more recent match first.
+      expect(res.body.results).toHaveLength(3);
       expect(res.body.results[0].embeddingText).toContain("again");
+      expect(res.body.results[1].embeddingText).toContain("jest timeout exceeded");
+      expect(res.body.results[2].embeddingText).toContain("npm build");
     });
 
     it("filters by type", async () => {

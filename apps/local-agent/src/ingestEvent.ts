@@ -5,6 +5,7 @@
 
 import { ulid } from "ulid";
 import type { MemoryEventInput, MemoryEvent } from "@recall/shared-types";
+import type { EmbeddingQueue } from "./embeddings/queue.js";
 import { redactMemoryEvent } from "./redaction/pipeline.js";
 import type { SqliteStore } from "./storage/sqlite.js";
 import type { LanceDbStore } from "./storage/lancedb.js";
@@ -15,6 +16,7 @@ const INITIAL_REV = 1;
 export interface IngestDeps {
   sqlite: SqliteStore;
   lancedb: LanceDbStore;
+  embeddingQueue: EmbeddingQueue;
 }
 
 export async function ingestEvent(input: MemoryEventInput, deps: IngestDeps): Promise<MemoryEvent> {
@@ -45,6 +47,11 @@ export async function ingestEvent(input: MemoryEventInput, deps: IngestDeps): Pr
     source: event.source,
     redacted: event.redacted
   });
+
+  // Embedding runs off the request path (spec §5A.1: POST /v1/events
+  // targets <50ms) and only ever sees the already-redacted embeddingText
+  // that was just persisted above (SEC-3).
+  deps.embeddingQueue.enqueue(event.id);
 
   return event;
 }

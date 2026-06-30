@@ -1,9 +1,13 @@
 import type { EmbeddingProvider } from "../../src/embeddings/provider.js";
 
-// Deterministic, fast, NOT semantically meaningful — only for tests that
-// exercise queueing/storage/HTTP wiring. Tests that actually need to prove
-// semantic retrieval works (or benchmark real search latency) must use the
-// real TransformersJsEmbeddingProvider instead.
+// Always returns a zero vector — deliberately *not* semantically
+// meaningful, by design. cosineSimilarity treats a zero vector as 0
+// similarity (see hybridSearch.ts), so this fake contributes nothing to
+// ranking and stays neutral: tests that exercise queueing/storage/HTTP
+// wiring get deterministic keyword+recency-driven results without vector
+// noise from an unrelated hash skewing the outcome. Tests that actually
+// need to prove semantic retrieval works (or benchmark real search
+// latency) must use the real TransformersJsEmbeddingProvider instead.
 export class FakeEmbeddingProvider implements EmbeddingProvider {
   readonly modelName = "fake-test-model";
   readonly dimension: number;
@@ -12,12 +16,7 @@ export class FakeEmbeddingProvider implements EmbeddingProvider {
     this.dimension = dimension;
   }
 
-  async embed(text: string): Promise<number[]> {
-    const vector = new Array(this.dimension).fill(0) as number[];
-    for (let i = 0; i < text.length; i++) {
-      vector[i % this.dimension] += text.charCodeAt(i);
-    }
-    const norm = Math.sqrt(vector.reduce((sum, v) => sum + v * v, 0)) || 1;
-    return vector.map((v) => v / norm);
+  async embed(_text: string): Promise<number[]> {
+    return new Array(this.dimension).fill(0) as number[];
   }
 }

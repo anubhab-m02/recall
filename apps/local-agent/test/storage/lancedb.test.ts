@@ -72,6 +72,58 @@ describe("LanceDbStore", () => {
     expect(localEvents.map((e) => e.id)).toEqual(["evt-1"]);
   });
 
+  it("updateEvent replaces the stored row in place (by id)", async () => {
+    await store.insertEvent(makeEvent());
+    const updated = {
+      ...makeEvent(),
+      embedding: [0.1, 0.2, 0.3],
+      embeddingModel: "fake-test-model",
+      embeddingDim: 3
+    };
+
+    await store.updateEvent(updated);
+
+    expect(await store.countEvents()).toBe(1);
+    expect(await store.getEventById("evt-1")).toEqual(updated);
+  });
+
+  describe("scanEventsForSearch", () => {
+    it("filters by tenant, type, project, and since", async () => {
+      await store.insertEvent(
+        makeEvent({ id: "evt-1", tenantId: "local", type: "terminal_command" })
+      );
+      await store.insertEvent(makeEvent({ id: "evt-2", tenantId: "other-tenant" }));
+      await store.insertEvent(
+        makeEvent({ id: "evt-3", type: "git_commit", occurredAt: "2026-06-01T00:00:00.000Z" })
+      );
+      await store.insertEvent(makeEvent({ id: "evt-4", project: { repoRoot: "/repo/other" } }));
+
+      const byTenant = await store.scanEventsForSearch({ tenantId: "local" });
+      expect(byTenant.map((e) => e.id).sort()).toEqual(["evt-1", "evt-3", "evt-4"]);
+
+      const byType = await store.scanEventsForSearch({ tenantId: "local", type: "git_commit" });
+      expect(byType.map((e) => e.id)).toEqual(["evt-3"]);
+
+      const bySince = await store.scanEventsForSearch({
+        tenantId: "local",
+        since: "2026-06-15T00:00:00.000Z"
+      });
+      expect(bySince.map((e) => e.id).sort()).toEqual(["evt-1", "evt-4"]);
+
+      const byProject = await store.scanEventsForSearch({
+        tenantId: "local",
+        project: "/repo/other"
+      });
+      expect(byProject.map((e) => e.id)).toEqual(["evt-4"]);
+    });
+
+    it("returns results unranked, leaving scoring to the caller", async () => {
+      await store.insertEvent(makeEvent({ id: "evt-1" }));
+      const results = await store.scanEventsForSearch({ tenantId: "local" });
+      expect(results).toHaveLength(1);
+    });
+  });
+
   it("round-trips a Lesson by id", async () => {
     const lesson = {
       id: "lesson-1",

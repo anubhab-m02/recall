@@ -4,14 +4,17 @@
 // package; that package is deprecated in favor of `@lancedb/lancedb`, the
 // current official LanceDB JS SDK, used here instead.
 //
-// Phase 1 scope: durable insert/fetch/delete by id, with tenantId/type/
-// occurredAt as filterable top-level columns. Rows store the full
-// MemoryEvent/Lesson as a JSON blob rather than a native Arrow vector
-// column — embeddings don't exist yet (embedding generation is Phase 3),
-// and inferring a stable Arrow schema (notably avoiding BigInt round-trips
-// for integer fields) from heterogeneous JS objects is exactly the kind of
-// risk worth deferring until hybridSearch (Phase 3) needs real vector +
-// FTS columns and can introduce them deliberately alongside an index.
+// Rows store the full MemoryEvent/Lesson as a JSON blob rather than a
+// native Arrow vector column, with tenantId/type/occurredAt as filterable
+// top-level columns. This was a deliberate Phase 1 choice to avoid
+// inferring a stable Arrow schema (notably BigInt round-trips for integer
+// fields) before real embeddings existed. Phase 3 adds embeddings but
+// keeps this representation: ranking now happens in JS (retrieval/
+// hybridSearch.ts) over scanEventsForSearch's candidate set rather than
+// via a native ANN index, which comfortably meets the spec's latency
+// budget (§5A.1: P95 <300ms over 1,000 events) without the added
+// complexity of a vector column + index. A native vector column remains
+// the natural next step if/when corpora grow well past that scale.
 
 import * as lancedb from "@lancedb/lancedb";
 import type { Lesson, MemoryEvent } from "@recall/shared-types";
@@ -19,6 +22,7 @@ import type { Lesson, MemoryEvent } from "@recall/shared-types";
 const EVENTS_TABLE = "memory_events";
 const LESSONS_TABLE = "lessons";
 const SEED_ROW_ID = "__schema_seed__";
+const SCAN_LIMIT = 1000;
 
 interface EventRow {
   id: string;
@@ -37,6 +41,22 @@ interface LessonRow {
 
 function escapeForFilter(value: string): string {
   return value.replace(/'/g, "''");
+}
+
+// Reads occasionally hit a transient Lance I/O error when they race a
+// concurrent commit (observed under the embedding queue's background
+// writes) — a "manifest/object not found" error from reading a dataset
+// version that was being superseded at that exact instant. This is an
+// embedded-database equivalent of an eventual-consistency hiccup, not a
+// logic bug: the very next read (microseconds later) succeeds. One short
+// retry absorbs it rather than surfacing a spurious 500 to the caller.
+async function withReadRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    return fn();
+  }
 }
 
 function eventToRow(event: MemoryEvent): EventRow {
@@ -98,7 +118,21 @@ const SEED_LESSON: Lesson = {
 };
 
 export class LanceDbStore {
+  // Serializes mutations (insert/delete/update) on this connection. Lance's
+  // versioned-commit model isn't safe under concurrent writers from a
+  // single process the way a SQL transaction would be — e.g. the
+  // background embedding queue's delete+reinsert racing a foreground
+  // POST /v1/events insert can silently lose one of the two writes.
+  // Reads aren't serialized; only mutations need this.
+  private writeLock: Promise<unknown> = Promise.resolve();
+
   private constructor(private readonly connection: lancedb.Connection) {}
+
+  private withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
+    const result = this.writeLock.then(fn, fn);
+    this.writeLock = result.catch(() => undefined);
+    return result;
+  }
 
   static async open(dbPath: string): Promise<LanceDbStore> {
     const connection = await lancedb.connect(dbPath);
@@ -130,25 +164,57 @@ export class LanceDbStore {
 
   // --- MemoryEvent ---
 
-  async insertEvent(event: MemoryEvent): Promise<void> {
+  private async insertEventUnlocked(event: MemoryEvent): Promise<void> {
     const table = await this.connection.openTable(EVENTS_TABLE);
     await table.add([eventToRow(event) as unknown as Record<string, unknown>]);
   }
 
-  async getEventById(id: string): Promise<MemoryEvent | undefined> {
-    const table = await this.connection.openTable(EVENTS_TABLE);
-    const rows = await table
-      .query()
-      .where(`id = '${escapeForFilter(id)}'`)
-      .limit(1)
-      .toArray();
-    const row = rows[0] as EventRow | undefined;
-    return row ? rowToEvent(row) : undefined;
-  }
-
-  async deleteEvent(id: string): Promise<void> {
+  private async deleteEventUnlocked(id: string): Promise<void> {
     const table = await this.connection.openTable(EVENTS_TABLE);
     await table.delete(`id = '${escapeForFilter(id)}'`);
+  }
+
+  insertEvent(event: MemoryEvent): Promise<void> {
+    return this.withWriteLock(() => this.insertEventUnlocked(event));
+  }
+
+  getEventById(id: string): Promise<MemoryEvent | undefined> {
+    return withReadRetry(async () => {
+      const table = await this.connection.openTable(EVENTS_TABLE);
+      const rows = await table
+        .query()
+        .where(`id = '${escapeForFilter(id)}'`)
+        .limit(1)
+        .toArray();
+      const row = rows[0] as EventRow | undefined;
+      return row ? rowToEvent(row) : undefined;
+    });
+  }
+
+  deleteEvent(id: string): Promise<void> {
+    return this.withWriteLock(() => this.deleteEventUnlocked(id));
+  }
+
+  // Used by the embedding queue (spec §11.1) to populate embedding/
+  // embeddingModel/embeddingDim once background embedding finishes for an
+  // event that was already persisted without one.
+  //
+  // This MUST be a single atomic upsert (LanceDB's mergeInsert), not a
+  // delete-then-reinsert pair: even serialized behind the write lock so no
+  // other *write* can interleave, a delete+insert still leaves a window
+  // where the row briefly doesn't exist at all, and reads (scanEventsForSearch,
+  // getEventById) aren't — and shouldn't need to be — blocked by the write
+  // lock. A concurrent search landing in that gap would silently miss the
+  // event. mergeInsert has no such gap: the row is replaced in one commit.
+  updateEvent(event: MemoryEvent): Promise<void> {
+    return this.withWriteLock(async () => {
+      const table = await this.connection.openTable(EVENTS_TABLE);
+      await table
+        .mergeInsert("id")
+        .whenMatchedUpdateAll()
+        .whenNotMatchedInsertAll()
+        .execute([eventToRow(event) as unknown as Record<string, unknown>]);
+    });
   }
 
   async countEvents(): Promise<number> {
@@ -156,79 +222,76 @@ export class LanceDbStore {
     return table.countRows();
   }
 
-  async listEventsByTenant(tenantId: string, limit = 100): Promise<MemoryEvent[]> {
-    const table = await this.connection.openTable(EVENTS_TABLE);
-    const rows = await table
-      .query()
-      .where(`tenantId = '${escapeForFilter(tenantId)}'`)
-      .limit(limit)
-      .toArray();
-    return (rows as EventRow[]).map(rowToEvent);
+  listEventsByTenant(tenantId: string, limit = 100): Promise<MemoryEvent[]> {
+    return withReadRetry(async () => {
+      const table = await this.connection.openTable(EVENTS_TABLE);
+      const rows = await table
+        .query()
+        .where(`tenantId = '${escapeForFilter(tenantId)}'`)
+        .limit(limit)
+        .toArray();
+      return (rows as EventRow[]).map(rowToEvent);
+    });
   }
 
-  // Interim search backing GET /v1/search (spec §8.1) until Phase 3 adds
-  // real vector + FTS columns and hybridSearch.ts replaces this with true
-  // hybrid retrieval (spec §11.2) behind the same wire contract. For now:
-  // scan the tenant's recent events, keyword-match in JS, sort by recency.
-  async searchEvents(options: {
+  // Candidate fetch backing hybridSearch.ts (spec §11.2): metadata-filtered
+  // but deliberately *unranked* — vector/keyword/recency scoring is
+  // hybridSearch's job, not the storage layer's. Capped at SCAN_LIMIT
+  // candidates, which keeps this comfortably within the latency budget
+  // (spec §5A.1) for the corpus sizes a v1 local install accumulates.
+  scanEventsForSearch(options: {
     tenantId: string;
-    query?: string;
     type?: string;
     project?: string;
     since?: string;
-    limit?: number;
   }): Promise<MemoryEvent[]> {
-    const table = await this.connection.openTable(EVENTS_TABLE);
-    const predicates = [`tenantId = '${escapeForFilter(options.tenantId)}'`];
-    if (options.type) {
-      predicates.push(`type = '${escapeForFilter(options.type)}'`);
-    }
-    const scanCap = 1000;
-    const rows = await table.query().where(predicates.join(" AND ")).limit(scanCap).toArray();
-    let events = (rows as EventRow[]).map(rowToEvent);
+    return withReadRetry(async () => {
+      const table = await this.connection.openTable(EVENTS_TABLE);
+      const predicates = [`tenantId = '${escapeForFilter(options.tenantId)}'`];
+      if (options.type) {
+        predicates.push(`type = '${escapeForFilter(options.type)}'`);
+      }
+      const rows = await table.query().where(predicates.join(" AND ")).limit(SCAN_LIMIT).toArray();
+      let events = (rows as EventRow[]).map(rowToEvent);
 
-    if (options.since) {
-      events = events.filter((event) => event.occurredAt >= options.since!);
-    }
-    if (options.project) {
-      events = events.filter((event) => event.project?.repoRoot === options.project);
-    }
+      if (options.since) {
+        events = events.filter((event) => event.occurredAt >= options.since!);
+      }
+      if (options.project) {
+        events = events.filter((event) => event.project?.repoRoot === options.project);
+      }
 
-    const needle = options.query?.trim().toLowerCase();
-    const matched = needle
-      ? events.filter((event) => {
-          const haystack = [event.embeddingText, ...event.tags, JSON.stringify(event.payload)]
-            .join(" ")
-            .toLowerCase();
-          return haystack.includes(needle);
-        })
-      : events;
-
-    matched.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
-    return matched.slice(0, options.limit ?? 20);
+      return events;
+    });
   }
 
   // --- Lesson ---
 
-  async insertLesson(lesson: Lesson): Promise<void> {
-    const table = await this.connection.openTable(LESSONS_TABLE);
-    await table.add([lessonToRow(lesson) as unknown as Record<string, unknown>]);
+  insertLesson(lesson: Lesson): Promise<void> {
+    return this.withWriteLock(async () => {
+      const table = await this.connection.openTable(LESSONS_TABLE);
+      await table.add([lessonToRow(lesson) as unknown as Record<string, unknown>]);
+    });
   }
 
-  async getLessonById(id: string): Promise<Lesson | undefined> {
-    const table = await this.connection.openTable(LESSONS_TABLE);
-    const rows = await table
-      .query()
-      .where(`id = '${escapeForFilter(id)}'`)
-      .limit(1)
-      .toArray();
-    const row = rows[0] as LessonRow | undefined;
-    return row ? rowToLesson(row) : undefined;
+  getLessonById(id: string): Promise<Lesson | undefined> {
+    return withReadRetry(async () => {
+      const table = await this.connection.openTable(LESSONS_TABLE);
+      const rows = await table
+        .query()
+        .where(`id = '${escapeForFilter(id)}'`)
+        .limit(1)
+        .toArray();
+      const row = rows[0] as LessonRow | undefined;
+      return row ? rowToLesson(row) : undefined;
+    });
   }
 
-  async deleteLesson(id: string): Promise<void> {
-    const table = await this.connection.openTable(LESSONS_TABLE);
-    await table.delete(`id = '${escapeForFilter(id)}'`);
+  deleteLesson(id: string): Promise<void> {
+    return this.withWriteLock(async () => {
+      const table = await this.connection.openTable(LESSONS_TABLE);
+      await table.delete(`id = '${escapeForFilter(id)}'`);
+    });
   }
 
   close(): void {

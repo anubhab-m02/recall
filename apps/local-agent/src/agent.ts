@@ -1,7 +1,8 @@
 // Boot/shutdown orchestration for the Local Agent daemon (spec §6.7,
 // §13 Phase 1 DoD: "Local Agent runs as `recall-agent start`"). Wires the
-// storage layers, capability token, and HTTP server together, with the
-// single-instance lock and discovery file required by spec §6.7.
+// storage layers, capability token, embedding provider/queue, and HTTP
+// server together, with the single-instance lock and discovery file
+// required by spec §6.7.
 
 import type { Server } from "node:http";
 import type express from "express";
@@ -12,6 +13,9 @@ import {
   removeDiscoveryFile,
   writeDiscoveryFile
 } from "./agentLifecycle.js";
+import type { EmbeddingProvider } from "./embeddings/provider.js";
+import { EmbeddingQueue } from "./embeddings/queue.js";
+import { TransformersJsEmbeddingProvider } from "./embeddings/transformersJsProvider.js";
 import { getLanceDbPath, getSqlitePath } from "./paths.js";
 import { AGENT_VERSION, createHttpServer } from "./server/http.js";
 import { LanceDbStore } from "./storage/lancedb.js";
@@ -25,6 +29,7 @@ export interface RunningAgent {
   server: Server;
   sqlite: SqliteStore;
   lancedb: LanceDbStore;
+  embeddingQueue: EmbeddingQueue;
   token: string;
   port: number;
 }
@@ -55,13 +60,36 @@ function listen(
   });
 }
 
-export async function startAgent(options: { port?: number } = {}): Promise<RunningAgent> {
+export interface StartAgentOptions {
+  port?: number;
+  // Overridable for tests (and any future non-Transformers.js provider) —
+  // defaults to the real local model so production boots need no wiring.
+  embeddingProvider?: EmbeddingProvider;
+}
+
+export async function startAgent(options: StartAgentOptions = {}): Promise<RunningAgent> {
   acquireLock();
   try {
     const token = loadOrCreateToken();
     const sqlite = new SqliteStore(getSqlitePath());
     const lancedb = await LanceDbStore.open(getLanceDbPath());
-    const app = createHttpServer({ token, sqlite, lancedb });
+    const embeddingProvider = options.embeddingProvider ?? new TransformersJsEmbeddingProvider();
+    const embeddingQueue = new EmbeddingQueue(embeddingProvider, lancedb);
+
+    // Recover from a restart that interrupted background embedding: any
+    // event still missing its embedding gets re-enqueued.
+    const unembedded = await lancedb.scanEventsForSearch({ tenantId: "local" });
+    for (const event of unembedded) {
+      if (!event.embeddingModel) embeddingQueue.enqueue(event.id);
+    }
+
+    const app = createHttpServer({
+      token,
+      sqlite,
+      lancedb,
+      embeddings: embeddingProvider,
+      embeddingQueue
+    });
     const { server, port } = await listen(app, options.port ?? DEFAULT_PORT);
 
     writeDiscoveryFile({
@@ -72,7 +100,7 @@ export async function startAgent(options: { port?: number } = {}): Promise<Runni
       version: AGENT_VERSION
     });
 
-    return { app, server, sqlite, lancedb, token, port };
+    return { app, server, sqlite, lancedb, embeddingQueue, token, port };
   } catch (err) {
     releaseLock();
     throw err;
@@ -83,6 +111,9 @@ export async function stopAgent(agent: RunningAgent): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     agent.server.close((err) => (err ? reject(err) : resolve()));
   });
+  // Must happen before closing lancedb — otherwise an in-flight embed()
+  // write can race a closed connection (see EmbeddingQueue.stop).
+  await agent.embeddingQueue.stop();
   agent.sqlite.close();
   agent.lancedb.close();
   removeDiscoveryFile();
