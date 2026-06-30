@@ -3,6 +3,7 @@
   "displayName": "Recall",
   "description": "Personal, local-first developer memory — silent capture, in-context resurfacing, standups, and MCP for AI agents.",
   "version": "0.1.0",
+  "publisher": "recall",
   "private": true,
   "type": "module",
   "engines": {
@@ -39,6 +40,10 @@
         "command": "recall.refreshSidebar",
         "title": "Recall: Refresh Memories",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "recall.testRedaction",
+        "title": "Recall: Test Redaction"
       }
     ],
     "viewsContainers": {
@@ -71,7 +76,40 @@
           "group": "navigation"
         }
       ]
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "recall.welcome",
+        "title": "Welcome to Recall",
+        "description": "Recall quietly captures your debugging process and helps you find it again later — entirely on your machine, encrypted, and pausable any time.",
+        "steps": [
+          {
+            "id": "whatIsCaptured",
+            "title": "What Recall captures",
+            "description": "File saves, terminal commands, and (soon) git activity, debug sessions, and diagnostics — turned into a private, searchable memory. File edits are captured as **diffs**, never the full file content.",
+            "media": {
+              "markdown": "walkthrough/what-is-captured.md"
+            }
+          },
+          {
+            "id": "whereStored",
+            "title": "Where it's stored",
+            "description": "Everything lives locally under `~/.recall/` — nothing leaves your machine unless you explicitly opt in to sync later.",
+            "media": {
+              "markdown": "walkthrough/where-stored.md"
+            }
+          },
+          {
+            "id": "pauseAndRedact",
+            "title": "Pause anytime, redact automatically",
+            "description": "Click the Recall item in the status bar to pause capture instantly. A redaction pipeline strips likely secrets before anything is saved — try it yourself.\n[Test Redaction](command:recall.testRedaction)",
+            "media": {
+              "markdown": "walkthrough/pause-and-redact.md"
+            }
+          }
+        ]
+      }
+    ]
   },
   "dependencies": {
     "@recall/shared-types": "workspace:*",
