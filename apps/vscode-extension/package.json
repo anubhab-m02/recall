@@ -6,7 +6,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.93.0"
   },
   "categories": [
     "Other"
@@ -14,17 +14,72 @@
   "activationEvents": [
     "onStartupFinished"
   ],
-  "main": "./dist/extension.js",
+  "main": "./dist/extension.cjs",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node esbuild.config.mjs",
     "test": "vitest run",
     "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
+  "contributes": {
+    "commands": [
+      {
+        "command": "recall.saveAsMemory",
+        "title": "Recall: Save as Memory"
+      },
+      {
+        "command": "recall.searchMemory",
+        "title": "Recall: Search My Memory"
+      },
+      {
+        "command": "recall.toggleCapturePause",
+        "title": "Recall: Pause/Resume Capture"
+      },
+      {
+        "command": "recall.refreshSidebar",
+        "title": "Recall: Refresh Memories",
+        "icon": "$(refresh)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "recall",
+          "title": "Recall",
+          "icon": "media/recall-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "recall": [
+        {
+          "id": "recall.sidebar",
+          "name": "Memories"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "recall.refreshSidebar",
+          "when": "view == recall.sidebar",
+          "group": "navigation"
+        },
+        {
+          "command": "recall.searchMemory",
+          "when": "view == recall.sidebar",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
   "dependencies": {
-    "@recall/shared-types": "workspace:*"
+    "@recall/shared-types": "workspace:*",
+    "diff": "^9.0.0"
   },
   "devDependencies": {
+    "@types/vscode": "^1.93.0",
+    "esbuild": "^0.28.1",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }
