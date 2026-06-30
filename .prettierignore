@@ -1,0 +1,10 @@
+node_modules
+dist
+.turbo
+coverage
+pnpm-lock.yaml
+*.vsix
+
+# Hand-curated prose (tables, Mermaid diagrams) — not run through Prettier's
+# markdown formatter.
+*.md

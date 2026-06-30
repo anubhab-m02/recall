@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Recall",
+  "version": "0.1.0",
+  "description": "Personal, local-first developer memory — browser capture surface.",
+  "background": {
+    "service_worker": "background/serviceWorker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup/index.html"
+  },
+  "permissions": ["storage", "contextMenus"],
+  "host_permissions": ["http://127.0.0.1/*"]
+}
