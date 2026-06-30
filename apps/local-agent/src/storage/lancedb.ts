@@ -166,6 +166,48 @@ export class LanceDbStore {
     return (rows as EventRow[]).map(rowToEvent);
   }
 
+  // Interim search backing GET /v1/search (spec §8.1) until Phase 3 adds
+  // real vector + FTS columns and hybridSearch.ts replaces this with true
+  // hybrid retrieval (spec §11.2) behind the same wire contract. For now:
+  // scan the tenant's recent events, keyword-match in JS, sort by recency.
+  async searchEvents(options: {
+    tenantId: string;
+    query?: string;
+    type?: string;
+    project?: string;
+    since?: string;
+    limit?: number;
+  }): Promise<MemoryEvent[]> {
+    const table = await this.connection.openTable(EVENTS_TABLE);
+    const predicates = [`tenantId = '${escapeForFilter(options.tenantId)}'`];
+    if (options.type) {
+      predicates.push(`type = '${escapeForFilter(options.type)}'`);
+    }
+    const scanCap = 1000;
+    const rows = await table.query().where(predicates.join(" AND ")).limit(scanCap).toArray();
+    let events = (rows as EventRow[]).map(rowToEvent);
+
+    if (options.since) {
+      events = events.filter((event) => event.occurredAt >= options.since!);
+    }
+    if (options.project) {
+      events = events.filter((event) => event.project?.repoRoot === options.project);
+    }
+
+    const needle = options.query?.trim().toLowerCase();
+    const matched = needle
+      ? events.filter((event) => {
+          const haystack = [event.embeddingText, ...event.tags, JSON.stringify(event.payload)]
+            .join(" ")
+            .toLowerCase();
+          return haystack.includes(needle);
+        })
+      : events;
+
+    matched.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+    return matched.slice(0, options.limit ?? 20);
+  }
+
   // --- Lesson ---
 
   async insertLesson(lesson: Lesson): Promise<void> {

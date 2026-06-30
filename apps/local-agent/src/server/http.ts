@@ -86,6 +86,33 @@ export function createHttpServer(deps: HttpServerDeps): express.Express {
     res.status(201).json({ events });
   });
 
+  app.get("/v1/search", async (req: Request, res: Response) => {
+    const parsed = z
+      .object({
+        q: z.string().optional(),
+        type: z.string().optional(),
+        project: z.string().optional(),
+        since: z.string().optional(),
+        limit: z.coerce.number().int().positive().max(200).optional(),
+        tenantId: z.string().optional()
+      })
+      .safeParse(req.query);
+    if (!parsed.success) {
+      sendValidationError(res, parsed.error);
+      return;
+    }
+    const { q, type, project, since, limit, tenantId } = parsed.data;
+    const results = await deps.lancedb.searchEvents({
+      tenantId: tenantId ?? "local",
+      query: q,
+      type,
+      project,
+      since,
+      limit
+    });
+    res.status(200).json({ results });
+  });
+
   app.post("/v1/redaction/test", (req: Request, res: Response) => {
     const parsed = z.object({ text: z.string() }).safeParse(req.body);
     if (!parsed.success) {

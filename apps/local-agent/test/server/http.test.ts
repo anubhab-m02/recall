@@ -150,6 +150,76 @@ describe("Local Agent HTTP API", () => {
     });
   });
 
+  describe("GET /v1/search", () => {
+    async function ingest(overrides: Record<string, unknown>) {
+      return request(app)
+        .post("/v1/events")
+        .set("Authorization", `Bearer ${TOKEN}`)
+        .send({
+          tenantId: "local",
+          deviceId: "device-1",
+          source: "vscode",
+          type: "terminal_command",
+          occurredAt: "2026-07-01T00:00:00.000Z",
+          payload: { command: "npm test", cwd: "/repo", exitCode: 0, outputExcerpt: "ok" },
+          embeddingText: "terminal_command | exit=0 | npm test",
+          ...overrides
+        });
+    }
+
+    it("matches on embeddingText and ranks by recency", async () => {
+      await ingest({
+        occurredAt: "2026-07-01T00:00:00.000Z",
+        embeddingText: "terminal_command | exit=1 | jest timeout exceeded"
+      });
+      await ingest({
+        occurredAt: "2026-07-02T00:00:00.000Z",
+        embeddingText: "terminal_command | exit=1 | jest timeout exceeded again"
+      });
+      await ingest({
+        occurredAt: "2026-07-01T12:00:00.000Z",
+        embeddingText: "terminal_command | exit=0 | npm build"
+      });
+
+      const res = await request(app)
+        .get("/v1/search")
+        .query({ q: "jest timeout" })
+        .set("Authorization", `Bearer ${TOKEN}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.results).toHaveLength(2);
+      expect(res.body.results[0].embeddingText).toContain("again");
+    });
+
+    it("filters by type", async () => {
+      await ingest({ type: "terminal_command" });
+      await ingest({
+        type: "git_commit",
+        payload: { sha: "abc123", message: "fix bug", filesChanged: [], diffStat: "" },
+        embeddingText: "git_commit | fix bug"
+      });
+
+      const res = await request(app)
+        .get("/v1/search")
+        .query({ type: "git_commit" })
+        .set("Authorization", `Bearer ${TOKEN}`);
+
+      expect(res.body.results).toHaveLength(1);
+      expect(res.body.results[0].type).toBe("git_commit");
+    });
+
+    it("returns recent events when no query is given", async () => {
+      await ingest({});
+      const res = await request(app).get("/v1/search").set("Authorization", `Bearer ${TOKEN}`);
+      expect(res.body.results).toHaveLength(1);
+    });
+
+    it("requires authentication", async () => {
+      const res = await request(app).get("/v1/search");
+      expect(res.status).toBe(401);
+    });
+  });
+
   describe("capture pause/resume (FR-25)", () => {
     it("pauses and resumes capture", async () => {
       const pauseRes = await request(app)
