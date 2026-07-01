@@ -44,6 +44,18 @@
       {
         "command": "recall.testRedaction",
         "title": "Recall: Test Redaction"
+      },
+      {
+        "command": "recall.askRecall",
+        "title": "Recall: Ask My Memory"
+      },
+      {
+        "command": "recall.showDailyStandup",
+        "title": "Recall: Show Daily Standup"
+      },
+      {
+        "command": "recall.showWeeklySummary",
+        "title": "Recall: Show Weekly Summary"
       }
     ],
     "viewsContainers": {
@@ -86,7 +98,7 @@
           {
             "id": "whatIsCaptured",
             "title": "What Recall captures",
-            "description": "File saves, terminal commands, and (soon) git activity, debug sessions, and diagnostics — turned into a private, searchable memory. File edits are captured as **diffs**, never the full file content.",
+            "description": "File saves, terminal commands, git activity, debug sessions, and diagnostics — turned into a private, searchable memory. File edits are captured as **diffs**, never the full file content.",
             "media": {
               "markdown": "walkthrough/what-is-captured.md"
             }

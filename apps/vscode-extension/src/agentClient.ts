@@ -10,9 +10,11 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   DEFAULT_SETTINGS,
+  type DailyStandup,
   type MemoryEvent,
   type MemoryEventInput,
-  type Settings
+  type Settings,
+  type WeeklySummary
 } from "@recall/shared-types";
 
 export interface AgentDiscovery {
@@ -39,6 +41,11 @@ export interface RelatedContextParams {
   file?: string;
   errorText?: string;
   limit?: number;
+}
+
+export interface AskResponse {
+  answer: string;
+  citations: { id: string; type: string; occurredAt: string }[];
 }
 
 // Mirrors apps/local-agent/src/paths.ts's RECALL_HOME convention so the
@@ -156,6 +163,23 @@ export class AgentClient {
 
   testRedaction(text: string): Promise<{ redacted: string; findings: unknown[] }> {
     return this.request("/v1/redaction/test", { method: "POST", body: JSON.stringify({ text }) });
+  }
+
+  ask(question: string): Promise<AskResponse> {
+    return this.request<AskResponse>("/v1/ask", {
+      method: "POST",
+      body: JSON.stringify({ question })
+    });
+  }
+
+  getStandup(date?: string): Promise<DailyStandup> {
+    const qs = date ? `?date=${encodeURIComponent(date)}` : "";
+    return this.request<DailyStandup>(`/v1/standup${qs}`);
+  }
+
+  getWeeklySummary(week?: string): Promise<WeeklySummary> {
+    const qs = week ? `?week=${encodeURIComponent(week)}` : "";
+    return this.request<WeeklySummary>(`/v1/standup/weekly${qs}`);
   }
 }
 

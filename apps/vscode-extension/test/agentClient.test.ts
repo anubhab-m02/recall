@@ -99,6 +99,52 @@ describe("AgentClient", () => {
     expect(calledUrl).not.toContain("errorText=");
   });
 
+  it("posts a question to /v1/ask", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ answer: "you set it to 20", citations: [] })
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new AgentClient(DISCOVERY);
+    const result = await client.ask("how did I configure the pool?");
+
+    expect(result.answer).toBe("you set it to 20");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://127.0.0.1:47811/v1/ask");
+    expect(JSON.parse(init.body as string)).toEqual({ question: "how did I configure the pool?" });
+  });
+
+  it("fetches a standup, with an optional date query param", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ date: "2026-07-01" }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new AgentClient(DISCOVERY);
+    await client.getStandup("2026-07-01");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:47811/v1/standup?date=2026-07-01",
+      expect.anything()
+    );
+  });
+
+  it("fetches a weekly summary, with an optional week query param", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ weekOf: "2026-06-29" }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new AgentClient(DISCOVERY);
+    await client.getWeeklySummary("2026-06-29");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:47811/v1/standup/weekly?week=2026-06-29",
+      expect.anything()
+    );
+  });
+
   it("throws a descriptive error on a non-ok response", async () => {
     vi.stubGlobal(
       "fetch",

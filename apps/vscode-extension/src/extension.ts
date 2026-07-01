@@ -17,6 +17,7 @@ import { registerManualCapture } from "./capture/manual.js";
 import { registerTaskCapture } from "./capture/tasks.js";
 import { registerTerminalCapture } from "./capture/terminal.js";
 import { maybeShowWalkthrough } from "./onboarding/walkthrough.js";
+import { registerAskRecallPanel } from "./ui/askRecallPanel.js";
 import { registerCodeLensProvider } from "./ui/codeLensProvider.js";
 import { registerProactiveContext } from "./ui/proactiveContext.js";
 import { ProactiveTrigger } from "./ui/proactiveTrigger.js";
@@ -56,6 +57,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   registerStatusBar(context, client, settings);
   registerProactiveContext(context, client, sidebar, proactiveTrigger);
   registerCodeLensProvider(context, client);
+  registerAskRecallPanel(context, client);
 
   await maybeShowWalkthrough(context);
 
