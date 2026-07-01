@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Recall</title>
+    <style>
+      body {
+        width: 260px;
+        font-family: system-ui, sans-serif;
+        font-size: 13px;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 14px;
+        margin: 0 0 8px;
+      }
+      button {
+        width: 100%;
+        margin-top: 8px;
+        padding: 6px;
+        cursor: pointer;
+      }
+      input {
+        width: 100%;
+        margin-top: 4px;
+        box-sizing: border-box;
+      }
+      #status {
+        color: #555;
+      }
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Recall</h1>
+
+    <section id="pairingSection">
+      <p>Paste the port + token from <code>~/.recall/agent.json</code>:</p>
+      <input id="portInput" type="number" placeholder="Port (e.g. 47811)" />
+      <input id="tokenInput" type="text" placeholder="Capability token" />
+      <button id="saveButton">Connect</button>
+    </section>
+
+    <section id="statusSection" class="hidden">
+      <p id="status"></p>
+      <button id="pauseButton"></button>
+      <p id="domainText"></p>
+      <button id="domainButton"></button>
+      <button id="disconnectButton">Disconnect</button>
+    </section>
+
+    <script type="module" src="Popup.js"></script>
+  </body>
+</html>
