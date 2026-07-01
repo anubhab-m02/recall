@@ -1,4 +1,8 @@
-// Phase 0 stub. Phase 6/11.4 implements the generation prompt templates
-// (Appendix A: RAG "Ask Recall", daily standup, weekly summary, lesson synthesis).
+// Generation prompt templates (spec §11.5, Appendix A): RAG "Ask Recall",
+// daily standup, weekly summary, lesson synthesis.
 
-export const PROMPT_TEMPLATES_PACKAGE_VERSION = "0.1.0";
+export * from "./askRecall.js";
+export * from "./dailyStandup.js";
+export * from "./lessonSynthesis.js";
+export * from "./types.js";
+export * from "./weeklySummary.js";
