@@ -117,6 +117,25 @@ describe("SqliteStore", () => {
     });
   });
 
+  it("upserts and fetches a skill profile by tenant", () => {
+    const profile = {
+      tenantId: "local",
+      updatedAt: "2026-07-01T12:00:00.000Z",
+      tagFrequencies: {
+        typescript: { count: 3, lastSeen: "2026-07-01T09:00:00.000Z", trend: "up" as const }
+      },
+      topLanguages: { typescript: 3 },
+      distinctProblemPatternsResolved: 1
+    };
+
+    store.setSkillProfile(profile);
+    expect(store.getSkillProfile("local")).toEqual(profile);
+
+    const updated = { ...profile, distinctProblemPatternsResolved: 2 };
+    store.setSkillProfile(updated);
+    expect(store.getSkillProfile("local")).toEqual(updated);
+  });
+
   it("upserts and fetches a weekly summary by weekOf", () => {
     expect(store.getWeeklySummaryByWeekOf("2026-06-29")).toBeUndefined();
 

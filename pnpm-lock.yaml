@@ -85,6 +85,9 @@ importers:
       '@recall/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
+      '@recall/web-dashboard':
+        specifier: workspace:*
+        version: link:../web-dashboard
       better-sqlite3:
         specifier: ^12.11.1
         version: 12.11.1
@@ -759,7 +762,6 @@ packages:
   '@lancedb/lancedb@0.30.0':
     resolution: {integrity: sha512-d0FoEL6cthqgsulqAc7fck6kRXrSRGMTqlKYbhSGSazHU6vB2GEpD737Mu0HZd7fMyBUdhR9sD1W2C9uQZ5p0Q==}
     engines: {node: '>= 18'}
-    cpu: [x64, arm64]
     os: [darwin, linux, win32]
     peerDependencies:
       apache-arrow: '>=15.0.0 <=18.1.0'

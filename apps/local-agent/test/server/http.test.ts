@@ -69,6 +69,16 @@ describe("Local Agent HTTP API", () => {
       const res = await request(app).get("/v1/settings").set("Authorization", `Bearer ${TOKEN}`);
       expect(res.status).toBe(200);
     });
+
+    it("accepts a request authenticated via ?token= query param (dashboard direct-navigation)", async () => {
+      const res = await request(app).get(`/v1/settings?token=${TOKEN}`);
+      expect(res.status).toBe(200);
+    });
+
+    it("rejects a wrong ?token= query param", async () => {
+      const res = await request(app).get("/v1/settings?token=wrong-token");
+      expect(res.status).toBe(401);
+    });
   });
 
   describe("POST /v1/events — end-to-end through redaction into storage", () => {
@@ -384,6 +394,19 @@ describe("Local Agent HTTP API", () => {
     it("requires authentication", async () => {
       const res = await request(app).get("/v1/skill-profile");
       expect(res.status).toBe(401);
+    });
+  });
+
+  describe("GET /dashboard (spec §13 Phase 10)", () => {
+    it("requires authentication", async () => {
+      const res = await request(app).get("/dashboard/dashboard.html");
+      expect(res.status).toBe(401);
+    });
+
+    it("serves the built web-dashboard static assets given a valid token", async () => {
+      const res = await request(app).get(`/dashboard/dashboard.html?token=${TOKEN}`);
+      expect(res.status).toBe(200);
+      expect(res.text).toContain("Recall — Skill Dashboard");
     });
   });
 

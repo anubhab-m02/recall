@@ -23,6 +23,9 @@ async function runStart(): Promise<number> {
   }
 
   console.log(`Recall Local Agent listening on http://127.0.0.1:${agent.port}`);
+  console.log(
+    `Dashboard: http://127.0.0.1:${agent.port}/dashboard/dashboard.html?token=${agent.token}`
+  );
 
   const shutdown = async (): Promise<void> => {
     await stopAgent(agent);

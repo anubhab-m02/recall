@@ -7,10 +7,12 @@ import express, { type NextFunction, type Request, type Response } from "express
 import { z } from "zod";
 import { MemoryEventInputSchema, SettingsSchema, type Settings } from "@recall/shared-types";
 import { tokensMatch } from "../agentLifecycle.js";
+import { getWebDashboardDistPath } from "./dashboardStatic.js";
 import type { EmbeddingProvider } from "../embeddings/provider.js";
 import type { EmbeddingQueue } from "../embeddings/queue.js";
 import type { GenerationProvider } from "../generation/provider.js";
 import { generateDailyStandup } from "../jobs/dailyStandup.js";
+import { generateSkillProfile } from "../jobs/skillProfile.js";
 import { generateWeeklySummary } from "../jobs/weeklySummary.js";
 import { testRedaction } from "../redaction/pipeline.js";
 import { hybridSearch } from "../retrieval/hybridSearch.js";
@@ -56,13 +58,23 @@ export function createHttpServer(deps: HttpServerDeps): express.Express {
   });
 
   // SEC-4a: every route except /v1/health requires the capability token.
+  // Accepted either as `Authorization: Bearer <token>` (every programmatic
+  // client — VS Code/browser extensions, MCP proxy) or as a `?token=`
+  // query param, so the dashboard (a plain page navigated to directly in a
+  // browser, spec §13 Phase 10) can be reached with a self-contained URL
+  // rather than requiring a separate pairing step — the same pattern
+  // Jupyter uses for its local, token-protected web UI. The token itself
+  // is still required and compared in constant time either way; this
+  // widens *how* it may be presented, not whether it's needed.
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.path === "/v1/health") {
       next();
       return;
     }
     const header = req.header("authorization") ?? "";
-    const provided = header.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
+    const headerToken = header.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
+    const queryToken = typeof req.query.token === "string" ? req.query.token : "";
+    const provided = headerToken || queryToken;
     if (!provided || !tokensMatch(provided, deps.token)) {
       res.status(401).json({ error: "unauthorized" });
       return;
@@ -192,14 +204,27 @@ export function createHttpServer(deps: HttpServerDeps): express.Express {
     res.status(200).json(summary);
   });
 
-  app.get("/v1/skill-profile", (req: Request, res: Response) => {
+  app.get("/v1/skill-profile", async (req: Request, res: Response) => {
     const parsed = z.object({ tenantId: z.string().optional() }).safeParse(req.query);
     if (!parsed.success) {
       sendValidationError(res, parsed.error);
       return;
     }
-    res.status(200).json(deps.sqlite.getSkillProfile(parsed.data.tenantId ?? "local"));
+    // Recomputed fresh on every request (spec FR-22) — cheap over the
+    // corpus sizes a v1 local install accumulates, same rationale as
+    // hybridSearch's full scan. Also persisted so it's available to the
+    // MCP get_skill_profile tool between dashboard/API calls.
+    const profile = await generateSkillProfile(parsed.data.tenantId ?? "local", {
+      lancedb: deps.lancedb,
+      sqlite: deps.sqlite
+    });
+    res.status(200).json(profile);
   });
+
+  // Static dashboard (spec §13 Phase 10) — gated by the same SEC-4a
+  // middleware above (query-param token accepted), served from the
+  // pre-built @recall/web-dashboard package.
+  app.use("/dashboard", express.static(getWebDashboardDistPath()));
 
   app.post("/v1/redaction/test", (req: Request, res: Response) => {
     const parsed = z.object({ text: z.string() }).safeParse(req.body);

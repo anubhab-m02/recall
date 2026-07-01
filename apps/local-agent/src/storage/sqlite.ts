@@ -299,12 +299,27 @@ export class SqliteStore {
   }
 
   // --- Skill profile (spec §7.4, FR-22) ---
-  //
-  // The longitudinal tag/language aggregation itself is Phase 10 scope
-  // (jobs/skillProfile.ts is still a stub) — this only wires the storage
-  // read path so the MCP `get_skill_profile` tool (required "at minimum"
-  // by FR-23 in this phase) has a well-formed, honestly-empty profile to
-  // return rather than a missing endpoint.
+
+  setSkillProfile(profile: SkillProfile): SkillProfile {
+    this.db
+      .prepare(
+        `INSERT INTO skill_profile (tenant_id, updated_at, tag_frequencies, top_languages, distinct_problem_patterns_resolved)
+         VALUES (@tenantId, @updatedAt, @tagFrequencies, @topLanguages, @distinctProblemPatternsResolved)
+         ON CONFLICT(tenant_id) DO UPDATE SET
+           updated_at = excluded.updated_at,
+           tag_frequencies = excluded.tag_frequencies,
+           top_languages = excluded.top_languages,
+           distinct_problem_patterns_resolved = excluded.distinct_problem_patterns_resolved`
+      )
+      .run({
+        tenantId: profile.tenantId,
+        updatedAt: profile.updatedAt,
+        tagFrequencies: JSON.stringify(profile.tagFrequencies),
+        topLanguages: JSON.stringify(profile.topLanguages),
+        distinctProblemPatternsResolved: profile.distinctProblemPatternsResolved
+      });
+    return profile;
+  }
 
   getSkillProfile(tenantId: string): SkillProfile {
     const row = this.db

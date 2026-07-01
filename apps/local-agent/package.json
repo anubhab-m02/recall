@@ -20,6 +20,7 @@
     "@recall/prompt-templates": "workspace:*",
     "@recall/redaction-rules": "workspace:*",
     "@recall/shared-types": "workspace:*",
+    "@recall/web-dashboard": "workspace:*",
     "better-sqlite3": "^12.11.1",
     "express": "^5.2.1",
     "node-cron": "^4.5.0",
