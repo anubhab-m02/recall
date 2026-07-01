@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // `recall-agent start|mcp|status` CLI entrypoint (spec §9, §13 Phase 1).
 
+import { existsSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { readDiscoveryFile } from "./agentLifecycle.js";
 import { startAgent, stopAgent, type RunningAgent } from "./agent.js";
@@ -77,14 +78,24 @@ export async function main(argv: string[]): Promise<number> {
   return 1;
 }
 
-// Compares resolved paths rather than raw URL strings — `import.meta.url`
-// percent-encodes characters like spaces (common in real install paths)
-// while `process.argv[1]` does not, so a naive string comparison silently
-// fails to match and `main()` never runs.
-const isDirectlyExecuted =
-  process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1];
+// Compares realpath-resolved paths rather than raw strings/URLs, for two
+// independent reasons a naive comparison silently fails on:
+//   1. `import.meta.url` percent-encodes characters like spaces (common in
+//      real install paths) while `process.argv[1]` does not.
+//   2. A globally-linked/installed CLI (`npm install -g`, `pnpm link
+//      --global`, or the `bin` field in package.json) runs through a
+//      symlink: `process.argv[1]` is the symlink path, but
+//      `import.meta.url` resolves through the realpath of the target file
+//      — so without realpath-resolving both sides, this never matches for
+//      any real installed instance of this CLI, only a direct `node
+//      dist/cli.js` invocation.
+function isDirectlyExecuted(): boolean {
+  const argvPath = process.argv[1];
+  if (!argvPath || !existsSync(argvPath)) return false;
+  return fileURLToPath(import.meta.url) === realpathSync(argvPath);
+}
 
-if (isDirectlyExecuted) {
+if (isDirectlyExecuted()) {
   main(process.argv).then((code) => {
     if (code !== 0) process.exitCode = code;
   });
