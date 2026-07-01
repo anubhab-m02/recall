@@ -66,4 +66,59 @@ describe("SqliteStore", () => {
     store.setSyncCursor("device-1", "cursor-abc");
     expect(store.getSyncCursor("device-1")).toBe("cursor-abc");
   });
+
+  it("upserts and fetches a daily standup by date", () => {
+    expect(store.getDailyStandupByDate("2026-07-01")).toBeUndefined();
+
+    store.upsertDailyStandup({
+      id: "standup-2026-07-01",
+      date: "2026-07-01",
+      generatedAt: "2026-07-01T09:00:00.000Z",
+      draftText: "Yesterday: fixed the flaky test.",
+      sourceEventIds: ["evt-1", "evt-2"]
+    });
+
+    const fetched = store.getDailyStandupByDate("2026-07-01");
+    expect(fetched?.draftText).toBe("Yesterday: fixed the flaky test.");
+    expect(fetched?.sourceEventIds).toEqual(["evt-1", "evt-2"]);
+    expect(fetched?.finalText).toBeUndefined();
+  });
+
+  it("upserting a standup for the same date replaces it rather than duplicating", () => {
+    store.upsertDailyStandup({
+      id: "standup-2026-07-01",
+      date: "2026-07-01",
+      generatedAt: "2026-07-01T09:00:00.000Z",
+      draftText: "first draft",
+      sourceEventIds: []
+    });
+    store.upsertDailyStandup({
+      id: "standup-2026-07-01",
+      date: "2026-07-01",
+      generatedAt: "2026-07-01T10:00:00.000Z",
+      draftText: "regenerated draft",
+      finalText: "edited and copied",
+      sourceEventIds: ["evt-1"]
+    });
+
+    const fetched = store.getDailyStandupByDate("2026-07-01");
+    expect(fetched?.draftText).toBe("regenerated draft");
+    expect(fetched?.finalText).toBe("edited and copied");
+  });
+
+  it("upserts and fetches a weekly summary by weekOf", () => {
+    expect(store.getWeeklySummaryByWeekOf("2026-06-29")).toBeUndefined();
+
+    store.upsertWeeklySummary({
+      id: "weekly-2026-06-29",
+      weekOf: "2026-06-29",
+      generatedAt: "2026-07-03T09:00:00.000Z",
+      draftText: "This week you worked across 2 repos.",
+      highlightedLessonIds: ["lesson-1"]
+    });
+
+    const fetched = store.getWeeklySummaryByWeekOf("2026-06-29");
+    expect(fetched?.draftText).toBe("This week you worked across 2 repos.");
+    expect(fetched?.highlightedLessonIds).toEqual(["lesson-1"]);
+  });
 });

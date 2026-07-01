@@ -124,6 +124,30 @@ describe("LanceDbStore", () => {
     });
   });
 
+  it("scans lessons scoped to a tenant", async () => {
+    const lesson = {
+      id: "lesson-1",
+      schemaVersion: 1,
+      rev: 1,
+      tenantId: "local",
+      title: "Flaky test fix",
+      summary: "Async teardown leak resolved by awaiting handle close.",
+      sourceEventIds: ["evt-1"],
+      tags: ["jest"],
+      embedding: [0.1, 0.2, 0.3],
+      embeddingModel: "all-MiniLM-L6-v2",
+      embeddingDim: 3,
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+      usefulnessScore: 0
+    };
+    await store.insertLesson(lesson);
+    await store.insertLesson({ ...lesson, id: "lesson-2", tenantId: "other-tenant" });
+
+    const lessons = await store.scanLessonsForTenant("local");
+    expect(lessons.map((l) => l.id)).toEqual(["lesson-1"]);
+  });
+
   it("round-trips a Lesson by id", async () => {
     const lesson = {
       id: "lesson-1",

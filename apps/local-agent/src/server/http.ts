@@ -9,8 +9,12 @@ import { MemoryEventInputSchema, SettingsSchema, type Settings } from "@recall/s
 import { tokensMatch } from "../agentLifecycle.js";
 import type { EmbeddingProvider } from "../embeddings/provider.js";
 import type { EmbeddingQueue } from "../embeddings/queue.js";
+import type { GenerationProvider } from "../generation/provider.js";
+import { generateDailyStandup } from "../jobs/dailyStandup.js";
+import { generateWeeklySummary } from "../jobs/weeklySummary.js";
 import { testRedaction } from "../redaction/pipeline.js";
 import { hybridSearch } from "../retrieval/hybridSearch.js";
+import { ragAsk } from "../retrieval/ragAsk.js";
 import { getRelatedContext } from "../retrieval/relatedContext.js";
 import { ingestEvent } from "../ingestEvent.js";
 import type { SqliteStore } from "../storage/sqlite.js";
@@ -26,6 +30,7 @@ export interface HttpServerDeps {
   lancedb: LanceDbStore;
   embeddings: EmbeddingProvider;
   embeddingQueue: EmbeddingQueue;
+  generation: GenerationProvider;
 }
 
 function isLoopback(remoteAddress: string | undefined): boolean {
@@ -134,6 +139,57 @@ export function createHttpServer(deps: HttpServerDeps): express.Express {
       deps
     );
     res.status(200).json({ results });
+  });
+
+  app.post("/v1/ask", async (req: Request, res: Response) => {
+    const parsed = z
+      .object({ question: z.string().min(1), tenantId: z.string().optional() })
+      .safeParse(req.body);
+    if (!parsed.success) {
+      sendValidationError(res, parsed.error);
+      return;
+    }
+    const { question, tenantId } = parsed.data;
+    const result = await ragAsk(tenantId ?? "local", question, {
+      lancedb: deps.lancedb,
+      embeddings: deps.embeddings,
+      provider: deps.generation
+    });
+    res.status(200).json(result);
+  });
+
+  app.get("/v1/standup", async (req: Request, res: Response) => {
+    const parsed = z
+      .object({ date: z.string().optional(), tenantId: z.string().optional() })
+      .safeParse(req.query);
+    if (!parsed.success) {
+      sendValidationError(res, parsed.error);
+      return;
+    }
+    const { date, tenantId } = parsed.data;
+    const jobDeps = { lancedb: deps.lancedb, sqlite: deps.sqlite, provider: deps.generation };
+    const standup = date
+      ? (deps.sqlite.getDailyStandupByDate(date) ??
+        (await generateDailyStandup(tenantId ?? "local", jobDeps, date)))
+      : await generateDailyStandup(tenantId ?? "local", jobDeps);
+    res.status(200).json(standup);
+  });
+
+  app.get("/v1/standup/weekly", async (req: Request, res: Response) => {
+    const parsed = z
+      .object({ week: z.string().optional(), tenantId: z.string().optional() })
+      .safeParse(req.query);
+    if (!parsed.success) {
+      sendValidationError(res, parsed.error);
+      return;
+    }
+    const { week, tenantId } = parsed.data;
+    const jobDeps = { lancedb: deps.lancedb, sqlite: deps.sqlite, provider: deps.generation };
+    const summary = week
+      ? (deps.sqlite.getWeeklySummaryByWeekOf(week) ??
+        (await generateWeeklySummary(tenantId ?? "local", jobDeps, week)))
+      : await generateWeeklySummary(tenantId ?? "local", jobDeps);
+    res.status(200).json(summary);
   });
 
   app.post("/v1/redaction/test", (req: Request, res: Response) => {

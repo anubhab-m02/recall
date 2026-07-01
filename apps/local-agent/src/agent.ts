@@ -16,6 +16,10 @@ import {
 import type { EmbeddingProvider } from "./embeddings/provider.js";
 import { EmbeddingQueue } from "./embeddings/queue.js";
 import { TransformersJsEmbeddingProvider } from "./embeddings/transformersJsProvider.js";
+import { ExtractiveFallbackProvider } from "./generation/extractiveFallbackProvider.js";
+import { OllamaProvider } from "./generation/ollamaProvider.js";
+import { resolveGenerationProvider, type GenerationProvider } from "./generation/provider.js";
+import { startScheduler, type Scheduler } from "./jobs/scheduler.js";
 import { getLanceDbPath, getSqlitePath } from "./paths.js";
 import { AGENT_VERSION, createHttpServer } from "./server/http.js";
 import { LanceDbStore } from "./storage/lancedb.js";
@@ -30,6 +34,7 @@ export interface RunningAgent {
   sqlite: SqliteStore;
   lancedb: LanceDbStore;
   embeddingQueue: EmbeddingQueue;
+  scheduler: Scheduler;
   token: string;
   port: number;
 }
@@ -65,6 +70,9 @@ export interface StartAgentOptions {
   // Overridable for tests (and any future non-Transformers.js provider) —
   // defaults to the real local model so production boots need no wiring.
   embeddingProvider?: EmbeddingProvider;
+  // Overridable for tests — defaults to auto-detected Ollama, falling
+  // back to the always-available extractive provider (spec §6.1).
+  generationProvider?: GenerationProvider;
 }
 
 export async function startAgent(options: StartAgentOptions = {}): Promise<RunningAgent> {
@@ -75,6 +83,9 @@ export async function startAgent(options: StartAgentOptions = {}): Promise<Runni
     const lancedb = await LanceDbStore.open(getLanceDbPath());
     const embeddingProvider = options.embeddingProvider ?? new TransformersJsEmbeddingProvider();
     const embeddingQueue = new EmbeddingQueue(embeddingProvider, lancedb);
+    const generationProvider =
+      options.generationProvider ??
+      (await resolveGenerationProvider([new OllamaProvider(), new ExtractiveFallbackProvider()]));
 
     // Recover from a restart that interrupted background embedding: any
     // event still missing its embedding gets re-enqueued.
@@ -88,7 +99,8 @@ export async function startAgent(options: StartAgentOptions = {}): Promise<Runni
       sqlite,
       lancedb,
       embeddings: embeddingProvider,
-      embeddingQueue
+      embeddingQueue,
+      generation: generationProvider
     });
     const { server, port } = await listen(app, options.port ?? DEFAULT_PORT);
 
@@ -100,7 +112,15 @@ export async function startAgent(options: StartAgentOptions = {}): Promise<Runni
       version: AGENT_VERSION
     });
 
-    return { app, server, sqlite, lancedb, embeddingQueue, token, port };
+    const scheduler = startScheduler({
+      tenantId: "local",
+      lancedb,
+      sqlite,
+      provider: generationProvider,
+      embeddings: embeddingProvider
+    });
+
+    return { app, server, sqlite, lancedb, embeddingQueue, scheduler, token, port };
   } catch (err) {
     releaseLock();
     throw err;
@@ -108,6 +128,7 @@ export async function startAgent(options: StartAgentOptions = {}): Promise<Runni
 }
 
 export async function stopAgent(agent: RunningAgent): Promise<void> {
+  agent.scheduler.stop();
   await new Promise<void>((resolve, reject) => {
     agent.server.close((err) => (err ? reject(err) : resolve()));
   });

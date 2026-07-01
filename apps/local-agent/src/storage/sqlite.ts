@@ -7,7 +7,13 @@
 import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { DEFAULT_SETTINGS, type Settings, type Tombstone } from "@recall/shared-types";
+import {
+  DEFAULT_SETTINGS,
+  type DailyStandup,
+  type Settings,
+  type Tombstone,
+  type WeeklySummary
+} from "@recall/shared-types";
 
 export interface AuditLogEntry {
   id: number;
@@ -17,6 +23,40 @@ export interface AuditLogEntry {
 }
 
 const SCHEMA_VERSION = 1;
+
+function rowToDailyStandup(row: {
+  id: string;
+  date: string;
+  generated_at: string;
+  draft_text: string;
+  final_text: string | null;
+  source_event_ids: string;
+}): DailyStandup {
+  return {
+    id: row.id,
+    date: row.date,
+    generatedAt: row.generated_at,
+    draftText: row.draft_text,
+    finalText: row.final_text ?? undefined,
+    sourceEventIds: JSON.parse(row.source_event_ids) as string[]
+  };
+}
+
+function rowToWeeklySummary(row: {
+  id: string;
+  week_of: string;
+  generated_at: string;
+  draft_text: string;
+  highlighted_lesson_ids: string;
+}): WeeklySummary {
+  return {
+    id: row.id,
+    weekOf: row.week_of,
+    generatedAt: row.generated_at,
+    draftText: row.draft_text,
+    highlightedLessonIds: JSON.parse(row.highlighted_lesson_ids) as string[]
+  };
+}
 
 export class SqliteStore {
   private readonly db: Database.Database;
@@ -174,6 +214,87 @@ export class SqliteStore {
       deletedAt: row.deleted_at,
       deletedBy: row.deleted_by
     }));
+  }
+
+  // --- Daily standup (spec §7.3, FR-20) ---
+
+  upsertDailyStandup(standup: DailyStandup): DailyStandup {
+    this.db
+      .prepare(
+        `INSERT INTO daily_standups (id, date, generated_at, draft_text, final_text, source_event_ids)
+         VALUES (@id, @date, @generatedAt, @draftText, @finalText, @sourceEventIds)
+         ON CONFLICT(id) DO UPDATE SET
+           generated_at = excluded.generated_at,
+           draft_text = excluded.draft_text,
+           final_text = excluded.final_text,
+           source_event_ids = excluded.source_event_ids`
+      )
+      .run({
+        id: standup.id,
+        date: standup.date,
+        generatedAt: standup.generatedAt,
+        draftText: standup.draftText,
+        finalText: standup.finalText ?? null,
+        sourceEventIds: JSON.stringify(standup.sourceEventIds)
+      });
+    return standup;
+  }
+
+  getDailyStandupByDate(date: string): DailyStandup | undefined {
+    const row = this.db
+      .prepare(
+        "SELECT id, date, generated_at, draft_text, final_text, source_event_ids FROM daily_standups WHERE date = ?"
+      )
+      .get(date) as
+      | {
+          id: string;
+          date: string;
+          generated_at: string;
+          draft_text: string;
+          final_text: string | null;
+          source_event_ids: string;
+        }
+      | undefined;
+    return row ? rowToDailyStandup(row) : undefined;
+  }
+
+  // --- Weekly summary (spec §7.3, FR-21) ---
+
+  upsertWeeklySummary(summary: WeeklySummary): WeeklySummary {
+    this.db
+      .prepare(
+        `INSERT INTO weekly_summaries (id, week_of, generated_at, draft_text, highlighted_lesson_ids)
+         VALUES (@id, @weekOf, @generatedAt, @draftText, @highlightedLessonIds)
+         ON CONFLICT(id) DO UPDATE SET
+           generated_at = excluded.generated_at,
+           draft_text = excluded.draft_text,
+           highlighted_lesson_ids = excluded.highlighted_lesson_ids`
+      )
+      .run({
+        id: summary.id,
+        weekOf: summary.weekOf,
+        generatedAt: summary.generatedAt,
+        draftText: summary.draftText,
+        highlightedLessonIds: JSON.stringify(summary.highlightedLessonIds)
+      });
+    return summary;
+  }
+
+  getWeeklySummaryByWeekOf(weekOf: string): WeeklySummary | undefined {
+    const row = this.db
+      .prepare(
+        "SELECT id, week_of, generated_at, draft_text, highlighted_lesson_ids FROM weekly_summaries WHERE week_of = ?"
+      )
+      .get(weekOf) as
+      | {
+          id: string;
+          week_of: string;
+          generated_at: string;
+          draft_text: string;
+          highlighted_lesson_ids: string;
+        }
+      | undefined;
+    return row ? rowToWeeklySummary(row) : undefined;
   }
 
   // --- Sync cursors (spec §6.4.1) ---

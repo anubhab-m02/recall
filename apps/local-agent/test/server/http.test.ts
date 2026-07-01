@@ -9,6 +9,7 @@ import { createHttpServer } from "../../src/server/http.js";
 import { SqliteStore } from "../../src/storage/sqlite.js";
 import { LanceDbStore } from "../../src/storage/lancedb.js";
 import { FakeEmbeddingProvider } from "../helpers/fakeEmbeddingProvider.js";
+import { FakeGenerationProvider } from "../helpers/fakeGenerationProvider.js";
 
 const TOKEN = "test-capability-token";
 
@@ -24,8 +25,16 @@ describe("Local Agent HTTP API", () => {
     sqlite = new SqliteStore(":memory:");
     lancedb = await LanceDbStore.open(join(dir, "lancedb"));
     const embeddings = new FakeEmbeddingProvider();
+    const generation = new FakeGenerationProvider();
     embeddingQueue = new EmbeddingQueue(embeddings, lancedb);
-    app = createHttpServer({ token: TOKEN, sqlite, lancedb, embeddings, embeddingQueue });
+    app = createHttpServer({
+      token: TOKEN,
+      sqlite,
+      lancedb,
+      embeddings,
+      embeddingQueue,
+      generation
+    });
   });
 
   afterEach(async () => {
@@ -269,6 +278,94 @@ describe("Local Agent HTTP API", () => {
 
     it("requires authentication", async () => {
       const res = await request(app).get("/v1/context/related").query({ file: "a.ts" });
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe("POST /v1/ask (spec §11.4, FR-19)", () => {
+    it("answers with citations for retrieved memories", async () => {
+      await request(app)
+        .post("/v1/events")
+        .set("Authorization", `Bearer ${TOKEN}`)
+        .send({
+          tenantId: "local",
+          deviceId: "device-1",
+          source: "vscode",
+          type: "terminal_command",
+          occurredAt: "2026-07-01T00:00:00.000Z",
+          payload: { command: "npm run migrate", cwd: "/repo", exitCode: 0, outputExcerpt: "" },
+          embeddingText: "terminal_command | staging db pool set to 20 connections"
+        });
+
+      const res = await request(app)
+        .post("/v1/ask")
+        .set("Authorization", `Bearer ${TOKEN}`)
+        .send({ question: "staging db pool" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.answer).toEqual(expect.any(String));
+      expect(res.body.citations).toHaveLength(1);
+    });
+
+    it("requires a non-empty question", async () => {
+      const res = await request(app)
+        .post("/v1/ask")
+        .set("Authorization", `Bearer ${TOKEN}`)
+        .send({ question: "" });
+      expect(res.status).toBe(400);
+    });
+
+    it("requires authentication", async () => {
+      const res = await request(app).post("/v1/ask").send({ question: "x" });
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe("GET /v1/standup (spec §7.3, FR-20)", () => {
+    it("generates a standup for an explicit date", async () => {
+      const res = await request(app)
+        .get("/v1/standup")
+        .query({ date: "2026-07-01" })
+        .set("Authorization", `Bearer ${TOKEN}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.date).toBe("2026-07-01");
+      expect(res.body.draftText).toEqual(expect.any(String));
+    });
+
+    it("returns the same standup on a second request rather than regenerating", async () => {
+      const first = await request(app)
+        .get("/v1/standup")
+        .query({ date: "2026-07-01" })
+        .set("Authorization", `Bearer ${TOKEN}`);
+      const second = await request(app)
+        .get("/v1/standup")
+        .query({ date: "2026-07-01" })
+        .set("Authorization", `Bearer ${TOKEN}`);
+
+      expect(second.body.generatedAt).toBe(first.body.generatedAt);
+    });
+
+    it("requires authentication", async () => {
+      const res = await request(app).get("/v1/standup");
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe("GET /v1/standup/weekly (spec §7.3, FR-21)", () => {
+    it("generates a weekly summary for an explicit week", async () => {
+      const res = await request(app)
+        .get("/v1/standup/weekly")
+        .query({ week: "2026-06-29" })
+        .set("Authorization", `Bearer ${TOKEN}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.weekOf).toBe("2026-06-29");
+      expect(res.body.draftText).toEqual(expect.any(String));
+    });
+
+    it("requires authentication", async () => {
+      const res = await request(app).get("/v1/standup/weekly");
       expect(res.status).toBe(401);
     });
   });

@@ -5,11 +5,16 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { startAgent, stopAgent, type RunningAgent } from "../src/agent.js";
 import { readDiscoveryFile } from "../src/agentLifecycle.js";
 import { FakeEmbeddingProvider } from "./helpers/fakeEmbeddingProvider.js";
+import { FakeGenerationProvider } from "./helpers/fakeGenerationProvider.js";
 
-// A fake provider keeps this suite fast and network-free — real Transformers.js
-// integration is covered by the dedicated tests in test/embeddings/ and
-// test/retrieval/hybridSearch.real.test.ts instead.
+// Fake providers keep this suite fast and network-free — real
+// Transformers.js integration is covered by test/embeddings/ and
+// test/retrieval/hybridSearch.real.test.ts, and real Ollama detection by
+// test/generation/ollamaProvider.test.ts. Without this override,
+// startAgent would try a real (short-timeout) fetch to Ollama's default
+// port on every test.
 const embeddingProvider = () => new FakeEmbeddingProvider();
+const generationProvider = () => new FakeGenerationProvider();
 
 // Exercises the real `recall-agent start` boot path end-to-end (spec §13
 // Phase 1 DoD) — lock, storage, HTTP server, and discovery file — at the
@@ -40,7 +45,11 @@ describe("startAgent / stopAgent", () => {
   });
 
   it("boots a reachable HTTP server and writes the discovery file", async () => {
-    agent = await startAgent({ port: 0, embeddingProvider: embeddingProvider() });
+    agent = await startAgent({
+      port: 0,
+      embeddingProvider: embeddingProvider(),
+      generationProvider: generationProvider()
+    });
 
     expect(agent.port).toBeGreaterThan(0);
 
@@ -55,21 +64,37 @@ describe("startAgent / stopAgent", () => {
   });
 
   it("refuses a second instance while the first is running", async () => {
-    agent = await startAgent({ port: 0, embeddingProvider: embeddingProvider() });
-    await expect(startAgent({ port: 0, embeddingProvider: embeddingProvider() })).rejects.toThrow(
-      /already running/
-    );
+    agent = await startAgent({
+      port: 0,
+      embeddingProvider: embeddingProvider(),
+      generationProvider: generationProvider()
+    });
+    await expect(
+      startAgent({
+        port: 0,
+        embeddingProvider: embeddingProvider(),
+        generationProvider: generationProvider()
+      })
+    ).rejects.toThrow(/already running/);
   });
 
   it("removes the discovery file and lock on stop", async () => {
-    agent = await startAgent({ port: 0, embeddingProvider: embeddingProvider() });
+    agent = await startAgent({
+      port: 0,
+      embeddingProvider: embeddingProvider(),
+      generationProvider: generationProvider()
+    });
     await stopAgent(agent);
     agent = undefined;
 
     expect(readDiscoveryFile()).toBeUndefined();
 
     // The lock should be released — a fresh start must succeed immediately.
-    const restarted = await startAgent({ port: 0, embeddingProvider: embeddingProvider() });
+    const restarted = await startAgent({
+      port: 0,
+      embeddingProvider: embeddingProvider(),
+      generationProvider: generationProvider()
+    });
     agent = restarted;
   });
 });

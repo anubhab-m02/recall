@@ -294,6 +294,25 @@ export class LanceDbStore {
     });
   }
 
+  // Backs jobs/clusterIntoLessons.ts (to avoid re-clustering events already
+  // covered by an existing Lesson) and jobs/weeklySummary.ts (to gather the
+  // week's Lessons). Deliberately unranked, same rationale as
+  // scanEventsForSearch — Lessons aren't yet merged into hybridSearch's
+  // ranked results (a FR-16 gap tracked for a future retrieval-layer pass,
+  // since Lesson lacks the `type`/`occurredAt` fields the ranker and the
+  // sidebar formatter currently assume MemoryEvent has).
+  scanLessonsForTenant(tenantId: string): Promise<Lesson[]> {
+    return withReadRetry(async () => {
+      const table = await this.connection.openTable(LESSONS_TABLE);
+      const rows = await table
+        .query()
+        .where(`tenantId = '${escapeForFilter(tenantId)}'`)
+        .limit(SCAN_LIMIT)
+        .toArray();
+      return (rows as LessonRow[]).map(rowToLesson);
+    });
+  }
+
   close(): void {
     this.connection.close();
   }
