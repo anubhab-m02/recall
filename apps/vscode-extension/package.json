@@ -6,6 +6,7 @@
   "publisher": "recall",
   "private": true,
   "type": "module",
+  "icon": "media/recall-icon-128.png",
   "engines": {
     "vscode": "^1.93.0"
   },
@@ -27,11 +28,13 @@
     "commands": [
       {
         "command": "recall.saveAsMemory",
-        "title": "Recall: Save as Memory"
+        "title": "Recall: Save as Memory",
+        "icon": "$(save)"
       },
       {
         "command": "recall.searchMemory",
-        "title": "Recall: Search My Memory"
+        "title": "Recall: Search My Memory",
+        "icon": "$(search)"
       },
       {
         "command": "recall.toggleCapturePause",
@@ -44,19 +47,23 @@
       },
       {
         "command": "recall.testRedaction",
-        "title": "Recall: Test Redaction"
+        "title": "Recall: Test Redaction",
+        "icon": "$(shield)"
       },
       {
         "command": "recall.askRecall",
-        "title": "Recall: Ask My Memory"
+        "title": "Recall: Ask My Memory",
+        "icon": "$(comment-discussion)"
       },
       {
         "command": "recall.showDailyStandup",
-        "title": "Recall: Show Daily Standup"
+        "title": "Recall: Show Daily Standup",
+        "icon": "$(checklist)"
       },
       {
         "command": "recall.showWeeklySummary",
-        "title": "Recall: Show Weekly Summary"
+        "title": "Recall: Show Weekly Summary",
+        "icon": "$(graph-line)"
       }
     ],
     "viewsContainers": {
@@ -87,9 +94,40 @@
           "command": "recall.searchMemory",
           "when": "view == recall.sidebar",
           "group": "navigation"
+        },
+        {
+          "command": "recall.askRecall",
+          "when": "view == recall.sidebar",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "recall.showDailyStandup",
+          "when": "view == recall.sidebar",
+          "group": "1_actions@2"
+        },
+        {
+          "command": "recall.showWeeklySummary",
+          "when": "view == recall.sidebar",
+          "group": "1_actions@3"
+        },
+        {
+          "command": "recall.saveAsMemory",
+          "when": "view == recall.sidebar",
+          "group": "2_capture@1"
+        },
+        {
+          "command": "recall.testRedaction",
+          "when": "view == recall.sidebar",
+          "group": "2_capture@2"
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "recall.sidebar",
+        "contents": "Recall quietly captures your file saves, terminal commands, git activity, and more, then helps you find it again later.\n\nNothing here yet? Try asking it something, or save your first note manually.\n\n[Ask Recall a question](command:recall.askRecall)\n[Save a note as memory](command:recall.saveAsMemory)\n\nEverything stays on your machine — see the [Welcome walkthrough](command:workbench.action.openWalkthrough?%22recall.recall-vscode-extension%23recall.welcome%22) for what's captured and how to pause it."
+      }
+    ],
     "walkthroughs": [
       {
         "id": "recall.welcome",
@@ -119,6 +157,15 @@
             "media": {
               "markdown": "walkthrough/pause-and-redact.md"
             }
+          },
+          {
+            "id": "tryItNow",
+            "title": "Try it now",
+            "description": "Ask Recall something about your own past work — it answers from what it's already captured, with citations back to the source.\n[Ask Recall a question](command:recall.askRecall)\n\nThe same button lives in the Recall sidebar's \"...\" menu any time, alongside Daily Standup and Weekly Summary.",
+            "media": {
+              "markdown": "walkthrough/try-it-now.md"
+            },
+            "completionEvents": ["onCommand:recall.askRecall"]
           }
         ]
       }

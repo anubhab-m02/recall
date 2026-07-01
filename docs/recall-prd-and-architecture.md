@@ -1,7 +1,7 @@
 # Recall — Personal Developer Memory System
 ## Product Requirements Document & Technical Architecture Specification
 
-**Version:** 1.1
+**Version:** 1.3
 **Status:** Ready for implementation
 **Audience:** This document is written to be handed directly to an autonomous AI coding assistant (e.g. Claude Code) as the source of truth for implementation. Every section that contains a "MUST / SHALL" is a hard requirement. Sections marked "SHOULD" are strong defaults that can be revisited. Sections marked "Future / Out of scope for v1" must not be built in the initial implementation passes.
 
@@ -11,6 +11,7 @@
 | 1.0 | 2026-07-01 | Initial PRD + architecture specification. |
 | 1.1 | 2026-07-01 | Architecture-review pass before implementation. Reconciled at-rest encryption with the actual storage stack (§9, §7.5, §10); added a **local capability token** for the loopback API and an explicit **threat model** (§6.6, §8.1, §10); specified sync **merge semantics (LWW via `rev`), tombstones, and local/cloud embedding-model parity** (§6.4, §7, Phases 8–9); added **schema + embedding versioning/migration** (§7.6); added an **agent lifecycle / singleton** model (§6.7); consolidated **non-functional requirements & a daemon resource budget** (§5A); added MV3 durable-queue and storage-retention requirements (§13, §7.5); annotated MCP tool schemas as illustrative shorthand (§8.2). |
 | 1.2 | 2026-07-01 | **v1 is now scoped to be zero-cost to build, host, and distribute.** Everything that requires a paid cloud service (backend hosting, managed Postgres/Redis/Qdrant, the Anthropic API) or a paid distribution channel (Chrome Web Store's one-time developer fee) is moved out of the v1 build entirely and captured in a companion document, [`recall-v2-cloud-and-distribution.md`](./recall-v2-cloud-and-distribution.md), to be picked up as v2. v1 remains fully functional without any of it — local capture, search, generation (via free local Ollama or the always-available extractive fallback), and MCP all work with zero network calls and zero recurring cost. Sections below are annotated inline wherever they referenced deferred scope; no local-only requirement changed. |
+| 1.3 | 2026-07-01 | **UX & discoverability pass, driven by dogfooding the packaged `.vsix`** rather than by new functional scope. Real usage of the installed VS Code extension surfaced that its best features (Ask Recall, Daily Standup, Weekly Summary) were Command-Palette-only and effectively undiscoverable, that passive capture gave zero visible confirmation anything was happening, and that the Marketplace listing had no README, no icon field, and only a generic placeholder activity-bar icon. Added **Phase 2.5 — UX & discoverability polish (retroactive)** (§13) and **FR-30/FR-31/FR-32** (§4) to make this an explicit, re-checkable requirement rather than an implicit assumption. No architecture, data model, or API contract changed. |
 
 ---
 
@@ -135,7 +136,10 @@ Senior developers accumulate years of tacit knowledge — debugging insights, ar
 - FR-28: Cloud sync is OFF by default and **not implemented at all in v1** (§6.4 describes the design so the local schema doesn't need to change later — see [`recall-v2-cloud-and-distribution.md`](./recall-v2-cloud-and-distribution.md) for the actual build). Whenever it is built, enabling it requires an explicit, separate opt-in, with a clear explanation of what "zero-knowledge backup" vs "cloud-assisted search" mode means.
 
 ### 5.8 Onboarding (SHOULD)
-- FR-29: First-run walkthrough (VS Code Walkthrough API) explaining what is captured, where it's stored, and how to pause/redact, before any background capture begins.
+- FR-29: First-run walkthrough (VS Code Walkthrough API) explaining what is captured, where it's stored, and how to pause/redact, before any background capture begins. The walkthrough MUST include at least one actionable step tied to a real command via `completionEvents` (e.g. "Try Ask Recall"), not purely descriptive steps — a user should complete the walkthrough having actually used the tool once, not just read about it.
+- FR-30: Every command that is part of the tool's core value loop (Ask Recall, Daily Standup, Weekly Summary — and Save as Memory / Test Redaction as secondary actions) MUST be reachable from the VS Code sidebar's `view/title` menu, not the Command Palette alone. A first-time user should never need to know an exact command name to discover what Recall can do.
+- FR-31: The VS Code sidebar MUST show an explanatory empty state (via `contributes.viewsWelcome`) before any memories exist, linking directly to the commands that produce the first one (Ask Recall, Save as Memory) — not a blank panel.
+- FR-32: The VS Code extension's Marketplace listing MUST have a `README.md` describing the value proposition and naming its key features, and a real (non-placeholder) icon set via `package.json`'s `"icon"` field — a user's first impression of the tool is the Marketplace/Extensions view, before install, not just the in-editor walkthrough after.
 
 ---
 
@@ -706,6 +710,29 @@ Work through phases in order. Each phase lists explicit tasks and a Definition o
 - Sidebar panel (tree view) listing recent memories, with a search box wired to `/v1/search`.
 - Onboarding walkthrough explaining capture + privacy before first background capture starts.
 - **DoD:** Installing the extension in the Extension Development Host, saving a file and running a terminal command produces visible entries in the sidebar within a few seconds; redaction is verified by capturing a fake secret and confirming it is not stored in raw form (inspect SQLite/LanceDB directly in test).
+
+### Phase 2.5 — UX & discoverability polish (retroactive)
+Not a new capability phase — a revision of Phase 2/5/11's *presentation* of
+already-built features, done because dogfooding the packaged `.vsix`
+surfaced FR-30/FR-31/FR-32 as real gaps (v1.3, see Revision History). Covers
+only the VS Code extension; the browser extension's popup gets the same
+light-touch treatment as a documented fast-follow, not in this pass.
+- Sidebar `view/title` menu surfaces Ask Recall / Daily Standup / Weekly
+  Summary / Save as Memory / Test Redaction — previously Command-Palette-only
+  (FR-30).
+- `contributes.viewsWelcome` empty state on `recall.sidebar` (FR-31).
+- Status bar gives ambient confirmation of passive capture (a live "N today"
+  count) rather than only showing pause/resume state.
+- Walkthrough gains an actionable "Try it now" step with a real
+  `completionEvents` binding (FR-29).
+- Marketplace `README.md`, a designed icon (activity-bar SVG + Marketplace
+  PNG) replacing the generic placeholder shape, and the previously-missing
+  `package.json` `"icon"` field (FR-32).
+- **DoD:** A first-time user can discover and run Ask Recall / Daily
+  Standup / Weekly Summary from the sidebar's `...` menu without opening the
+  Command Palette; the sidebar shows an explanatory empty state before any
+  memories exist; the status bar gives ambient confirmation that passive
+  capture is active; the Marketplace listing has a README and a real icon.
 
 ### Phase 3 — Embeddings & basic retrieval
 - Integrate Transformers.js embedding provider in the Local Agent; embed on a debounced queue after event ingestion.

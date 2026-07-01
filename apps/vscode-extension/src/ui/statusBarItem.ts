@@ -4,7 +4,8 @@
 
 import * as vscode from "vscode";
 import type { AgentClient, SettingsCache } from "../agentClient.js";
-import { formatStatusBarState } from "./statusBarFormat.js";
+import { AUTO_REFRESH_INTERVAL_MS } from "./sidebarPanel.js";
+import { formatStatusBarState, startOfLocalDayIso } from "./statusBarFormat.js";
 
 export function registerStatusBar(
   context: vscode.ExtensionContext,
@@ -15,13 +16,36 @@ export function registerStatusBar(
   item.command = "recall.toggleCapturePause";
   context.subscriptions.push(item);
 
+  let todayCount: number | undefined;
+
   const render = (): void => {
-    const state = formatStatusBarState(settings.get().capturePaused);
+    const state = formatStatusBarState(settings.get().capturePaused, todayCount);
     item.text = state.text;
     item.tooltip = state.tooltip;
   };
   render();
   item.show();
+
+  // Ambient confirmation that passive capture is actually happening — file
+  // saves, terminal commands, git activity, etc. are otherwise completely
+  // silent, which was the concrete complaint that motivated this (a
+  // first-time user has no visible proof anything is being captured at
+  // all). Reuses the same /v1/search the sidebar already calls, so no new
+  // backend endpoint is needed.
+  const refreshCount = async (): Promise<void> => {
+    try {
+      const { results } = await client.search({ since: startOfLocalDayIso(), limit: 200 });
+      todayCount = results.length;
+      render();
+    } catch {
+      // Leave todayCount as-is (or undefined) — a transient failure here
+      // shouldn't flip the status bar into an error state; the pause/resume
+      // control itself surfaces real connectivity failures.
+    }
+  };
+  void refreshCount();
+  const interval = setInterval(() => void refreshCount(), AUTO_REFRESH_INTERVAL_MS);
+  context.subscriptions.push({ dispose: () => clearInterval(interval) });
 
   context.subscriptions.push(
     vscode.commands.registerCommand("recall.toggleCapturePause", async () => {

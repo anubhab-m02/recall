@@ -7,3 +7,4 @@ vitest.config.ts
 tsconfig.json
 .vscode/**
 **/*.test.ts
+media/recall-icon-source.svg

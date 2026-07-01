@@ -17,7 +17,7 @@ import {
 // light timer in addition to the explicit triggers (manual refresh and
 // search). 10s keeps "visible within a few seconds" true (Phase 2 DoD)
 // without polling the agent aggressively.
-const AUTO_REFRESH_INTERVAL_MS = 10_000;
+export const AUTO_REFRESH_INTERVAL_MS = 10_000;
 
 class MemoryTreeItem extends vscode.TreeItem {
   constructor(event: MemoryEvent, fallbackWorkspaceRoot: string | undefined) {
