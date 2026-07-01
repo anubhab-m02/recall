@@ -29,7 +29,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(output);
   output.appendLine("Recall extension activating...");
 
-  const client = await ensureAgentRunning(output);
+  const client = await ensureAgentRunning(output, context.globalStorageUri.fsPath);
   if (!client) {
     output.appendLine(
       "Recall activated without a connected Local Agent — capture is disabled for this session."

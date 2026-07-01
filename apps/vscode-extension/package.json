@@ -20,7 +20,8 @@
     "build": "node esbuild.config.mjs",
     "test": "vitest run",
     "lint": "eslint src",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "package": "vsce package --no-dependencies -o dist/recall.vsix"
   },
   "contributes": {
     "commands": [
@@ -129,6 +130,7 @@
   },
   "devDependencies": {
     "@types/vscode": "^1.93.0",
+    "@vscode/vsce": "^3.2.1",
     "esbuild": "^0.28.1",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
