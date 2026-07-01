@@ -11,6 +11,7 @@ import type { EmbeddingProvider } from "../embeddings/provider.js";
 import type { EmbeddingQueue } from "../embeddings/queue.js";
 import { testRedaction } from "../redaction/pipeline.js";
 import { hybridSearch } from "../retrieval/hybridSearch.js";
+import { getRelatedContext } from "../retrieval/relatedContext.js";
 import { ingestEvent } from "../ingestEvent.js";
 import type { SqliteStore } from "../storage/sqlite.js";
 import type { LanceDbStore } from "../storage/lancedb.js";
@@ -109,6 +110,27 @@ export function createHttpServer(deps: HttpServerDeps): express.Express {
     const { q, type, project, since, limit, tenantId } = parsed.data;
     const results = await hybridSearch(
       { tenantId: tenantId ?? "local", query: q, type, project, since, limit },
+      deps
+    );
+    res.status(200).json({ results });
+  });
+
+  app.get("/v1/context/related", async (req: Request, res: Response) => {
+    const parsed = z
+      .object({
+        file: z.string().optional(),
+        errorText: z.string().optional(),
+        tenantId: z.string().optional(),
+        limit: z.coerce.number().int().positive().max(20).optional()
+      })
+      .safeParse(req.query);
+    if (!parsed.success) {
+      sendValidationError(res, parsed.error);
+      return;
+    }
+    const { file, errorText, tenantId, limit } = parsed.data;
+    const results = await getRelatedContext(
+      { tenantId: tenantId ?? "local", file, errorText, limit },
       deps
     );
     res.status(200).json({ results });

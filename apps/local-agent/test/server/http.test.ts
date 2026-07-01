@@ -233,6 +233,46 @@ describe("Local Agent HTTP API", () => {
     });
   });
 
+  describe("GET /v1/context/related", () => {
+    it("surfaces related events for a file/errorText query without an explicit search", async () => {
+      await request(app)
+        .post("/v1/events")
+        .set("Authorization", `Bearer ${TOKEN}`)
+        .send({
+          tenantId: "local",
+          deviceId: "device-1",
+          source: "vscode",
+          type: "terminal_command",
+          occurredAt: "2026-07-01T00:00:00.000Z",
+          payload: { command: "npm test", cwd: "/repo", exitCode: 1, outputExcerpt: "" },
+          embeddingText: "terminal_command | exit=1 | jest timeout exceeded in teardown"
+        });
+
+      const res = await request(app)
+        .get("/v1/context/related")
+        .query({ errorText: "jest timeout exceeded" })
+        .set("Authorization", `Bearer ${TOKEN}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.results).toHaveLength(1);
+      expect(res.body.results[0].embeddingText).toContain("jest timeout");
+    });
+
+    it("returns no results when neither file nor errorText is given", async () => {
+      const res = await request(app)
+        .get("/v1/context/related")
+        .set("Authorization", `Bearer ${TOKEN}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.results).toEqual([]);
+    });
+
+    it("requires authentication", async () => {
+      const res = await request(app).get("/v1/context/related").query({ file: "a.ts" });
+      expect(res.status).toBe(401);
+    });
+  });
+
   describe("capture pause/resume (FR-25)", () => {
     it("pauses and resumes capture", async () => {
       const pauseRes = await request(app)

@@ -114,6 +114,24 @@ export const GitCommitPayloadSchema = z.object({
   diffStat: z.string()
 });
 
+export const BranchSwitchPayloadSchema = z.object({
+  fromBranch: z.string().optional(),
+  toBranch: z.string()
+});
+
+export const DiagnosticResolvedPayloadSchema = z.object({
+  filePath: z.string(),
+  severity: z.enum(["error", "warning"]),
+  message: z.string(),
+  resolvedAfterMs: z.number().int().nonnegative().optional()
+});
+
+export const TaskRunPayloadSchema = z.object({
+  taskName: z.string(),
+  taskType: z.string().optional(),
+  exitCode: z.number().int().optional()
+});
+
 export const SearchQueryPayloadSchema = z.object({
   engineOrSite: z.string(),
   query: z.string()
