@@ -7,8 +7,11 @@
   "bin": {
     "recall-agent": "./dist/cli.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node esbuild.config.mjs && node scripts/copyDashboardAssets.mjs",
     "test": "vitest run",
     "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -17,10 +20,6 @@
     "@huggingface/transformers": "^4.2.0",
     "@lancedb/lancedb": "^0.30.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@recall/prompt-templates": "workspace:*",
-    "@recall/redaction-rules": "workspace:*",
-    "@recall/shared-types": "workspace:*",
-    "@recall/web-dashboard": "workspace:*",
     "better-sqlite3": "^12.11.1",
     "express": "^5.2.1",
     "node-cron": "^4.5.0",
@@ -28,10 +27,15 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@recall/prompt-templates": "workspace:*",
+    "@recall/redaction-rules": "workspace:*",
+    "@recall/shared-types": "workspace:*",
+    "@recall/web-dashboard": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.6",
     "@types/node-cron": "^3.0.11",
     "@types/supertest": "^7.2.0",
+    "esbuild": "^0.28.1",
     "supertest": "^7.2.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
