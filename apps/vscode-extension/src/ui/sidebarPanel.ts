@@ -51,6 +51,14 @@ export class RecallSidebarProvider implements vscode.TreeDataProvider<MemoryTree
     void this.refresh();
   }
 
+  // Proactive surfacing (spec §11.3): pushes results fetched from
+  // /v1/context/related directly, bypassing the explicit /v1/search query
+  // path — the next manual refresh() / setQuery() call replaces this view.
+  setRelatedResults(events: MemoryEvent[]): void {
+    this.items = events;
+    this._onDidChangeTreeData.fire();
+  }
+
   async refresh(): Promise<void> {
     try {
       const { results } = await this.client.search({ q: this.query, limit: 50 });

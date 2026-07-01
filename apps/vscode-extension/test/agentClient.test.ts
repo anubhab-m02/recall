@@ -87,6 +87,18 @@ describe("AgentClient", () => {
     expect(calledUrl).not.toContain("type=");
   });
 
+  it("builds context/related query strings from provided params only", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ results: [] }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new AgentClient(DISCOVERY);
+    await client.getRelatedContext({ file: "src/foo.ts" });
+
+    const calledUrl = fetchMock.mock.calls[0][0] as string;
+    expect(calledUrl).toContain("file=src%2Ffoo.ts");
+    expect(calledUrl).not.toContain("errorText=");
+  });
+
   it("throws a descriptive error on a non-ok response", async () => {
     vi.stubGlobal(
       "fetch",

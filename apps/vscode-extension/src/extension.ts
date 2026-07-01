@@ -9,10 +9,17 @@
 import * as vscode from "vscode";
 import { SettingsCache } from "./agentClient.js";
 import { ensureAgentRunning } from "./agentSupervisor.js";
+import { registerDebugSessionCapture } from "./capture/debugSessions.js";
+import { registerDiagnosticsCapture } from "./capture/diagnostics.js";
 import { registerFileEditCapture } from "./capture/fileEdits.js";
+import { registerGitCapture } from "./capture/git.js";
 import { registerManualCapture } from "./capture/manual.js";
+import { registerTaskCapture } from "./capture/tasks.js";
 import { registerTerminalCapture } from "./capture/terminal.js";
 import { maybeShowWalkthrough } from "./onboarding/walkthrough.js";
+import { registerCodeLensProvider } from "./ui/codeLensProvider.js";
+import { registerProactiveContext } from "./ui/proactiveContext.js";
+import { ProactiveTrigger } from "./ui/proactiveTrigger.js";
 import { registerSidebar } from "./ui/sidebarPanel.js";
 import { registerStatusBar } from "./ui/statusBarItem.js";
 
@@ -34,11 +41,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const deviceId = vscode.env.machineId;
 
+  const proactiveTrigger = new ProactiveTrigger();
+  context.subscriptions.push(proactiveTrigger);
+
   registerFileEditCapture(context, client, settings, deviceId);
-  registerTerminalCapture(context, client, settings, deviceId);
+  registerTerminalCapture(context, client, settings, deviceId, proactiveTrigger);
   registerManualCapture(context, client, deviceId);
-  registerSidebar(context, client);
+  registerDebugSessionCapture(context, client, settings, deviceId);
+  registerDiagnosticsCapture(context, client, settings, deviceId);
+  registerGitCapture(context, client, settings, deviceId);
+  registerTaskCapture(context, client, settings, deviceId);
+
+  const sidebar = registerSidebar(context, client);
   registerStatusBar(context, client, settings);
+  registerProactiveContext(context, client, sidebar, proactiveTrigger);
+  registerCodeLensProvider(context, client);
 
   await maybeShowWalkthrough(context);
 

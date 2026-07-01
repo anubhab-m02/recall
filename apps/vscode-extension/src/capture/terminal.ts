@@ -4,6 +4,7 @@
 
 import * as vscode from "vscode";
 import type { AgentClient, SettingsCache } from "../agentClient.js";
+import type { ProactiveTrigger } from "../ui/proactiveTrigger.js";
 import { buildTerminalEmbeddingText, truncateOutput } from "./terminalUtils.js";
 
 const MAX_OUTPUT_CHARS = 4000;
@@ -12,7 +13,8 @@ export function registerTerminalCapture(
   context: vscode.ExtensionContext,
   client: AgentClient,
   settings: SettingsCache,
-  deviceId: string
+  deviceId: string,
+  proactiveTrigger?: ProactiveTrigger
 ): void {
   const buffers = new Map<vscode.TerminalShellExecution, string[]>();
 
@@ -26,7 +28,7 @@ export function registerTerminalCapture(
 
   context.subscriptions.push(
     vscode.window.onDidEndTerminalShellExecution((event) => {
-      void handleEnd(event, buffers, client, settings, deviceId);
+      void handleEnd(event, buffers, client, settings, deviceId, proactiveTrigger);
     })
   );
 }
@@ -59,7 +61,8 @@ async function handleEnd(
   buffers: Map<vscode.TerminalShellExecution, string[]>,
   client: AgentClient,
   settings: SettingsCache,
-  deviceId: string
+  deviceId: string,
+  proactiveTrigger: ProactiveTrigger | undefined
 ): Promise<void> {
   const chunks = buffers.get(event.execution) ?? [];
   buffers.delete(event.execution);
@@ -76,6 +79,12 @@ async function handleEnd(
 
   const exitCode = event.exitCode ?? -1;
   const outputExcerpt = truncateOutput(chunks, MAX_OUTPUT_CHARS);
+
+  // Spec §11.3: a failing terminal command is one of the three proactive-
+  // surfacing triggers, alongside active editor change and new diagnostics.
+  if (exitCode !== 0) {
+    proactiveTrigger?.notifyTerminalFailure(outputExcerpt || commandLine);
+  }
 
   try {
     await client.postEvent({

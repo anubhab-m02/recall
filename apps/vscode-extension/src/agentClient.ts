@@ -35,6 +35,12 @@ export interface SearchResponse {
   results: MemoryEvent[];
 }
 
+export interface RelatedContextParams {
+  file?: string;
+  errorText?: string;
+  limit?: number;
+}
+
 // Mirrors apps/local-agent/src/paths.ts's RECALL_HOME convention so the
 // extension and agent agree on where the discovery file lives (spec §6.7).
 export function getRecallHome(): string {
@@ -118,6 +124,15 @@ export class AgentClient {
     if (params.limit) query.set("limit", String(params.limit));
     const qs = query.toString();
     return this.request<SearchResponse>(`/v1/search${qs ? `?${qs}` : ""}`);
+  }
+
+  getRelatedContext(params: RelatedContextParams): Promise<SearchResponse> {
+    const query = new URLSearchParams();
+    if (params.file) query.set("file", params.file);
+    if (params.errorText) query.set("errorText", params.errorText);
+    if (params.limit) query.set("limit", String(params.limit));
+    const qs = query.toString();
+    return this.request<SearchResponse>(`/v1/context/related${qs ? `?${qs}` : ""}`);
   }
 
   getSettings(): Promise<Settings> {
