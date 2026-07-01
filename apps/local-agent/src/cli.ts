@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { readDiscoveryFile } from "./agentLifecycle.js";
 import { startAgent, stopAgent, type RunningAgent } from "./agent.js";
 import { SingleInstanceLockError } from "./agentLifecycle.js";
+import { NoAgentRunningError } from "./mcp/agentHttpClient.js";
+import { startMcpServer } from "./mcp/server.js";
 
 async function runStart(): Promise<number> {
   let agent: RunningAgent;
@@ -50,10 +52,20 @@ async function runStatus(): Promise<number> {
   return 1;
 }
 
-function runMcp(): number {
-  // Phase 7 stub — the MCP server is a mode of this same process backed by
-  // the same storage/retrieval code (spec FR-23/24, §8.2).
-  console.log("recall-agent mcp: not yet implemented (lands in Phase 7).");
+async function runMcp(): Promise<number> {
+  // stdio IS the JSON-RPC transport here (spec §8.1: "recall-agent mcp"
+  // runs as an MCP server over stdio) — nothing may write to stdout
+  // outside the MCP SDK itself, so diagnostics go to stderr only.
+  try {
+    await startMcpServer();
+  } catch (err) {
+    if (err instanceof NoAgentRunningError) {
+      console.error(err.message);
+      return 1;
+    }
+    console.error(err);
+    return 1;
+  }
   return 0;
 }
 

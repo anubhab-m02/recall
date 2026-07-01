@@ -106,6 +106,17 @@ describe("SqliteStore", () => {
     expect(fetched?.finalText).toBe("edited and copied");
   });
 
+  it("returns a well-formed empty skill profile before any aggregation has run", () => {
+    const profile = store.getSkillProfile("local");
+    expect(profile).toEqual({
+      tenantId: "local",
+      updatedAt: new Date(0).toISOString(),
+      tagFrequencies: {},
+      topLanguages: {},
+      distinctProblemPatternsResolved: 0
+    });
+  });
+
   it("upserts and fetches a weekly summary by weekOf", () => {
     expect(store.getWeeklySummaryByWeekOf("2026-06-29")).toBeUndefined();
 

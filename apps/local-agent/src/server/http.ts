@@ -192,6 +192,15 @@ export function createHttpServer(deps: HttpServerDeps): express.Express {
     res.status(200).json(summary);
   });
 
+  app.get("/v1/skill-profile", (req: Request, res: Response) => {
+    const parsed = z.object({ tenantId: z.string().optional() }).safeParse(req.query);
+    if (!parsed.success) {
+      sendValidationError(res, parsed.error);
+      return;
+    }
+    res.status(200).json(deps.sqlite.getSkillProfile(parsed.data.tenantId ?? "local"));
+  });
+
   app.post("/v1/redaction/test", (req: Request, res: Response) => {
     const parsed = z.object({ text: z.string() }).safeParse(req.body);
     if (!parsed.success) {

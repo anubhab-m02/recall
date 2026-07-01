@@ -27,8 +27,8 @@ describe("cli", () => {
     expect(await main(["node", "cli.js", "status"])).toBe(1);
   });
 
-  it("mcp is a recognized, no-op Phase 7 stub", async () => {
-    expect(await main(["node", "cli.js", "mcp"])).toBe(0);
+  it("mcp fails clearly when no Local Agent is running to proxy to", async () => {
+    expect(await main(["node", "cli.js", "mcp"])).toBe(1);
   });
 
   it("rejects unknown subcommands", async () => {

@@ -370,6 +370,23 @@ describe("Local Agent HTTP API", () => {
     });
   });
 
+  describe("GET /v1/skill-profile (spec §7.4, FR-22)", () => {
+    it("returns a well-formed empty profile before aggregation has run (Phase 10)", async () => {
+      const res = await request(app)
+        .get("/v1/skill-profile")
+        .set("Authorization", `Bearer ${TOKEN}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.tenantId).toBe("local");
+      expect(res.body.tagFrequencies).toEqual({});
+    });
+
+    it("requires authentication", async () => {
+      const res = await request(app).get("/v1/skill-profile");
+      expect(res.status).toBe(401);
+    });
+  });
+
   describe("capture pause/resume (FR-25)", () => {
     it("pauses and resumes capture", async () => {
       const pauseRes = await request(app)

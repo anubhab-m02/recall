@@ -11,6 +11,7 @@ import {
   DEFAULT_SETTINGS,
   type DailyStandup,
   type Settings,
+  type SkillProfile,
   type Tombstone,
   type WeeklySummary
 } from "@recall/shared-types";
@@ -295,6 +296,47 @@ export class SqliteStore {
         }
       | undefined;
     return row ? rowToWeeklySummary(row) : undefined;
+  }
+
+  // --- Skill profile (spec §7.4, FR-22) ---
+  //
+  // The longitudinal tag/language aggregation itself is Phase 10 scope
+  // (jobs/skillProfile.ts is still a stub) — this only wires the storage
+  // read path so the MCP `get_skill_profile` tool (required "at minimum"
+  // by FR-23 in this phase) has a well-formed, honestly-empty profile to
+  // return rather than a missing endpoint.
+
+  getSkillProfile(tenantId: string): SkillProfile {
+    const row = this.db
+      .prepare(
+        "SELECT tenant_id, updated_at, tag_frequencies, top_languages, distinct_problem_patterns_resolved FROM skill_profile WHERE tenant_id = ?"
+      )
+      .get(tenantId) as
+      | {
+          tenant_id: string;
+          updated_at: string;
+          tag_frequencies: string;
+          top_languages: string;
+          distinct_problem_patterns_resolved: number;
+        }
+      | undefined;
+
+    if (!row) {
+      return {
+        tenantId,
+        updatedAt: new Date(0).toISOString(),
+        tagFrequencies: {},
+        topLanguages: {},
+        distinctProblemPatternsResolved: 0
+      };
+    }
+    return {
+      tenantId: row.tenant_id,
+      updatedAt: row.updated_at,
+      tagFrequencies: JSON.parse(row.tag_frequencies) as SkillProfile["tagFrequencies"],
+      topLanguages: JSON.parse(row.top_languages) as SkillProfile["topLanguages"],
+      distinctProblemPatternsResolved: row.distinct_problem_patterns_resolved
+    };
   }
 
   // --- Sync cursors (spec §6.4.1) ---
