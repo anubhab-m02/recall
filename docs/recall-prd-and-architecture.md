@@ -10,6 +10,7 @@
 |---|---|---|
 | 1.0 | 2026-07-01 | Initial PRD + architecture specification. |
 | 1.1 | 2026-07-01 | Architecture-review pass before implementation. Reconciled at-rest encryption with the actual storage stack (§9, §7.5, §10); added a **local capability token** for the loopback API and an explicit **threat model** (§6.6, §8.1, §10); specified sync **merge semantics (LWW via `rev`), tombstones, and local/cloud embedding-model parity** (§6.4, §7, Phases 8–9); added **schema + embedding versioning/migration** (§7.6); added an **agent lifecycle / singleton** model (§6.7); consolidated **non-functional requirements & a daemon resource budget** (§5A); added MV3 durable-queue and storage-retention requirements (§13, §7.5); annotated MCP tool schemas as illustrative shorthand (§8.2). |
+| 1.2 | 2026-07-01 | **v1 is now scoped to be zero-cost to build, host, and distribute.** Everything that requires a paid cloud service (backend hosting, managed Postgres/Redis/Qdrant, the Anthropic API) or a paid distribution channel (Chrome Web Store's one-time developer fee) is moved out of the v1 build entirely and captured in a companion document, [`recall-v2-cloud-and-distribution.md`](./recall-v2-cloud-and-distribution.md), to be picked up as v2. v1 remains fully functional without any of it — local capture, search, generation (via free local Ollama or the always-available extractive fallback), and MCP all work with zero network calls and zero recurring cost. Sections below are annotated inline wherever they referenced deferred scope; no local-only requirement changed. |
 
 ---
 
@@ -20,6 +21,7 @@
 3. Treat **Section 9 (Tech Stack Decision Matrix)** as fixed unless a chosen library is found to be genuinely unworkable, in which case document the substitution and why.
 4. Section 12 (Monorepo Layout) is the exact folder structure to create in Phase 0. Do not invent a different layout.
 5. This is a v1 / MVP-toward-scale spec. Anything marked "Future" should be stubbed (interfaces/types may exist) but not implemented.
+6. **v1 MUST be buildable, runnable, and distributable at zero cost** — no paid cloud hosting, no paid third-party API usage (including the Anthropic API), no paid app-store listing fees. Anything that requires spending money is out of scope for v1 and lives instead in the companion document [`recall-v2-cloud-and-distribution.md`](./recall-v2-cloud-and-distribution.md). Where this document still describes that deferred scope (for architectural forward-compatibility, e.g. §6.4's merge semantics), it is documentation of a design constraint the local-only v1 must not preclude — not an instruction to build it now.
 
 ---
 
@@ -48,7 +50,8 @@ Senior developers accumulate years of tacit knowledge — debugging insights, ar
 - G5: Auto-generate a daily standup draft and a weekly learning summary from captured activity.
 - G6: Expose the personal knowledge base to AI agents via a standard protocol (MCP), so tools like Claude Code can use a developer's own past reasoning as context.
 - G7: Make privacy controls visible, granular, and trustworthy (pause capture, redact secrets, per-project/per-domain opt-out, full export, full delete).
-- G8: Design the backend so that an *optional* multi-device sync tier and a *future* team tier can be added without re-architecting.
+- G8: Design the local data model so that an *optional* multi-device sync tier and a *future* team tier can be added later without re-architecting or migrating existing local data — without building or paying for any of that tier in v1 (see G9 and NG6).
+- G9: **v1 MUST run entirely free of recurring or usage-based cost.** No cloud hosting bill, no paid API usage (including the Anthropic API), no paid distribution fee is required to build, run, or ship v1. Every AI feature has a free local path (Transformers.js embeddings, Ollama or the extractive fallback for generation) that a user never has to pay for.
 
 ### 2.2 Non-Goals (v1)
 - NG1: Recall is not a team knowledge base / wiki replacement in v1. Multi-user shared knowledge graphs are future scope.
@@ -56,6 +59,7 @@ Senior developers accumulate years of tacit knowledge — debugging insights, ar
 - NG3: Recall is not an AI pair-programmer. It does not write code. It supplies *context* to the developer and to other coding agents.
 - NG4: Recall does not attempt real-time screen recording, keystroke logging, or audio/video capture.
 - NG5: v1 does not include IDEs other than VS Code. (Architecture must not preclude JetBrains/Neovim later — see Section 6.5.)
+- NG6: **v1 does not include any cloud-hosted component or any paid distribution channel.** No auth/sync backend, no cloud-assisted search, no Anthropic API integration, and no Chrome Web Store submission (which carries a one-time developer registration fee) are built or required for v1. All of this is fully specified for later pickup in [`recall-v2-cloud-and-distribution.md`](./recall-v2-cloud-and-distribution.md), not abandoned — just deliberately out of scope until the free local product has proven itself.
 
 ### 2.3 Success Metrics
 - Activation: % of installs that reach "first surfaced memory accepted as useful" within 7 days.
@@ -128,7 +132,7 @@ Senior developers accumulate years of tacit knowledge — debugging insights, ar
 - FR-25: A single, fast "pause capture" control reachable from the VS Code status bar and the browser extension toolbar icon, pausing both surfaces in sync.
 - FR-26: Per-project capture opt-out in VS Code; per-domain capture opt-out in the browser extension.
 - FR-27: Full local data export (JSON) and full local data wipe, both single-command operations.
-- FR-28: Cloud sync is OFF by default. Enabling it requires an explicit, separate opt-in, with a clear explanation of what "zero-knowledge backup" vs "cloud-assisted search" mode means (Section 6.4).
+- FR-28: Cloud sync is OFF by default and **not implemented at all in v1** (§6.4 describes the design so the local schema doesn't need to change later — see [`recall-v2-cloud-and-distribution.md`](./recall-v2-cloud-and-distribution.md) for the actual build). Whenever it is built, enabling it requires an explicit, separate opt-in, with a clear explanation of what "zero-knowledge backup" vs "cloud-assisted search" mode means.
 
 ### 5.8 Onboarding (SHOULD)
 - FR-29: First-run walkthrough (VS Code Walkthrough API) explaining what is captured, where it's stored, and how to pause/redact, before any background capture begins.
@@ -177,16 +181,18 @@ The agent runs continuously in the background; it MUST be a good citizen.
 
 ### 6.2 High-level diagram
 
+**v1 builds only the "Developer's Machine" subgraph below — no network calls, no cloud service, no cost.** The `Cloud Backend` subgraph (and the Anthropic API dependency inside it) is entirely deferred to v2; its full diagram, component responsibilities, and tech stack now live in [`recall-v2-cloud-and-distribution.md`](./recall-v2-cloud-and-distribution.md) so this document stays an accurate description of what's actually being built.
+
 ```mermaid
 flowchart TB
-    subgraph Dev["Developer's Machine"]
+    subgraph Dev["Developer's Machine (100% of v1)"]
         VSC["VS Code Extension"]
         BRW["Browser Extension"]
         subgraph Agent["Recall Local Agent (background daemon)"]
             API["Local HTTP/WS API\n(localhost only)"]
             MCP["MCP Server\n(stdio)"]
             EMB["Embedding Engine\n(Transformers.js, local ONNX)"]
-            GEN["Generation Engine\n(Ollama local LLM, or pluggable cloud LLM)"]
+            GEN["Generation Engine\n(Ollama local LLM, or free extractive fallback)"]
             RED["Redaction Pipeline"]
             STORE["Storage Layer\nSQLite (relational) + LanceDB (vectors)"]
             JOBS["Scheduler\n(node-cron: clustering, standup, weekly summary)"]
@@ -200,7 +206,7 @@ flowchart TB
         ClaudeCode["Claude Code / Claude Desktop / Cursor"] -- "MCP tools" --> MCP
     end
 
-    subgraph Cloud["Cloud Backend (optional, opt-in)"]
+    subgraph Cloud["Cloud Backend — v2, deferred, NOT built in v1 (see recall-v2-cloud-and-distribution.md)"]
         GW["API Gateway"]
         AUTH["Auth Service"]
         SYNC["Sync Service\n(encrypted blob store)"]
@@ -211,14 +217,14 @@ flowchart TB
         RD[("Redis + BullMQ")]
     end
 
-    API -. "opt-in sync, E2E encrypted" .-> GW
+    API -. "v2: opt-in sync, E2E encrypted" .-> GW
     GW --> AUTH
     GW --> SYNC --> PG
     SYNC --> OBJ
     GW --> ING
     ING --> RD
     ING --> QD
-    ING -. "Claude API\n(summarization, only cloud-assisted mode)" .-> LLMAPI["Anthropic API"]
+    ING -. "v2: Claude API\n(summarization, only cloud-assisted mode)" .-> LLMAPI["Anthropic API"]
 ```
 
 ### 6.3 Component responsibilities
@@ -229,16 +235,12 @@ flowchart TB
 | Browser Extension | Capture allowlisted browsing signals, popup controls, talk to Local Agent | Browser background service worker |
 | Recall Local Agent | Single source of truth: storage, redaction, embeddings, retrieval, generation, scheduling, MCP server | Background process on dev machine |
 | MCP Server (mode of Local Agent) | Expose memory to external AI agents over MCP | stdio (spawned by Claude Desktop/Code config) or local HTTP+SSE |
-| Cloud API Gateway | Single entrypoint, auth, rate limiting | Cloud |
-| Auth Service | Account + device identity, JWT issuance | Cloud |
-| Sync Service | Accepts encrypted blobs, manages multi-device merge state | Cloud |
-| Ingestion/Worker Service | Cloud-assisted embeddings & summarization (opt-in only) | Cloud, queue-backed workers |
 
-### 6.4 Sync modes (cloud, both opt-in, OFF by default)
-Two distinct modes must be implemented as separate, clearly-labeled toggles — do not conflate them:
+The four cloud components (API Gateway, Auth Service, Sync Service, Ingestion/Worker Service) are **v2 scope, not built in v1** — see [`recall-v2-cloud-and-distribution.md`](./recall-v2-cloud-and-distribution.md) for their responsibilities.
 
-1. **Encrypted Backup & Multi-Device Merge (default cloud mode, zero-knowledge).** The Local Agent encrypts `MemoryEvent`/`Lesson` blobs client-side (XChaCha20-Poly1305 via libsodium, key derived from a passphrase the user holds — never sent to the server) before upload. The Sync Service stores ciphertext blobs + metadata needed for merge (id, updated_at, device_id, tenant_id) only. The server can never read content. Search across devices still happens locally: each device pulls and decrypts blobs, then indexes them into its own local LanceDB.
-2. **Cloud-Assisted Search (explicit second opt-in, non-zero-knowledge).** For users who want server-side semantic search without all devices being online/synced, the Ingestion Service receives plaintext (already redacted) event text, generates embeddings, and stores them in Qdrant server-side, and may call the Anthropic API for higher-quality summarization than the local model can produce. This mode MUST show a one-time explicit warning that content leaves the device, separate from the backup opt-in.
+### 6.4 Sync modes (cloud, both opt-in, OFF by default, **v2 — not built in v1**)
+
+Full detail on both modes now lives in [`recall-v2-cloud-and-distribution.md`](./recall-v2-cloud-and-distribution.md). Summarized here only because it shapes the local data model that v1 *does* build (§6.4.1, §7): two distinct modes, never conflated, both requiring their own explicit opt-in — **Encrypted Backup & Multi-Device Merge** (zero-knowledge, client-side encrypted) and **Cloud-Assisted Search** (non-zero-knowledge, requires the Anthropic API and a hosted Qdrant, and is therefore the one with a real recurring cost). Neither exists as working code in v1; the `syncOptIns` fields in `Settings` (§7) exist today only so the schema doesn't need a breaking migration once v2 implements them.
 
 #### 6.4.1 Merge semantics (both sync modes)
 - **Identity & immutability.** `MemoryEvent`s are append-only and immutable once written (their `id` is a ULID, which is time-sortable). They never conflict; sync is a set-union by `id`.
@@ -257,8 +259,8 @@ The security requirements in §10 exist to counter specific adversaries. v1 desi
 |---|---|---|
 | **Malicious / curious local process** (other app on the same machine) | Can attempt to connect to the Local Agent's loopback port and read captured memory | Loopback-only bind (SEC-4) **+ per-install capability token** required on every request (§8.1); token stored in OS keychain, not world-readable config. |
 | **Malicious webpage** in the user's browser | Can issue `fetch`/WebSocket to `http://127.0.0.1:<port>` and attempt DNS-rebinding; `Origin` is not always sent | Capability token (unknown to arbitrary pages) **+** `Host`/`Origin` allowlist **+** reject requests lacking the token. The token is the real boundary; Origin checks are defense-in-depth only. |
-| **Honest-but-curious cloud** (Encrypted Backup mode) | Sees all uploaded blobs + metadata | Client-side XChaCha20-Poly1305; key never transmitted (SEC-5). Server stores ciphertext + merge metadata only. |
-| **Cloud operator (Cloud-Assisted mode)** | Sees post-redaction plaintext the user explicitly chose to send | Out of zero-knowledge scope by design; gated behind a distinct second opt-in (SEC-6) and redaction (FR-11). |
+| **Honest-but-curious cloud** (Encrypted Backup mode — **v2, not built in v1**) | Sees all uploaded blobs + metadata | Client-side XChaCha20-Poly1305; key never transmitted (SEC-5). Server stores ciphertext + merge metadata only. Not applicable until v2 ships this mode — see [`recall-v2-cloud-and-distribution.md`](./recall-v2-cloud-and-distribution.md). |
+| **Cloud operator** (Cloud-Assisted mode — **v2, not built in v1**) | Sees post-redaction plaintext the user explicitly chose to send | Out of zero-knowledge scope by design; gated behind a distinct second opt-in (SEC-6) and redaction (FR-11). Not applicable until v2 ships this mode. |
 | **Lost / stolen device** | Physical access to disk and possibly an unlocked session | At-rest protection per §10 (OS full-disk encryption as the baseline + keychain-bound app key); "pause/lock" does not protect an already-unlocked machine. Stated honestly so users aren't misled. |
 | **Accidental secret capture** | Secrets pasted into terminal/logs/pages | Redaction pipeline before persist *and* before embed (SEC-3); user-testable (FR-12); audit log (SEC-8). |
 
@@ -419,7 +421,7 @@ interface SkillProfile {
 The data model and the embedding model both evolve; the on-disk format MUST be versioned so upgrades don't corrupt or silently mis-rank existing data.
 - **Record schema version.** Every `MemoryEvent`/`Lesson` carries `schemaVersion`; the data directory records the current version. On agent start, run forward-only migrations (a numbered migration list for SQLite; a documented backfill routine for LanceDB columns) to bring records to the current version before serving requests.
 - **Embedding model version.** Each vector records the `embeddingModel` + `embeddingDim` that produced it. Search MUST NOT mix vectors from different models. When the default embedding model is upgraded, existing vectors are flagged stale and re-embedded in the background from their stored `embeddingText`; until re-embedded, stale-model rows fall back to FTS/keyword ranking so search never returns silently-wrong neighbors.
-- **Cloud parity.** Cloud-Assisted Qdrant collections are keyed by `embeddingModel`/`embeddingDim`; a model mismatch triggers cloud-side re-embedding from `embeddingText` (§6.4.1), never a comparison of incompatible vectors.
+- **Cloud parity (v2 — not applicable in v1, no Qdrant exists yet).** Cloud-Assisted Qdrant collections are keyed by `embeddingModel`/`embeddingDim`; a model mismatch triggers cloud-side re-embedding from `embeddingText` (§6.4.1), never a comparison of incompatible vectors.
 
 ---
 
@@ -492,16 +494,9 @@ The token is the real trust boundary (see threat model §6.6); loopback + Origin
 }
 ```
 
-### 8.3 Cloud Backend API (only relevant once Phase 8+ is reached)
+### 8.3 Cloud Backend API — **v2, moved out of this document**
 
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/v1/auth/signup`, `/v1/auth/login` | Account auth (email or OAuth GitHub/Google) |
-| POST | `/v1/auth/device/pair` | Register a new device under the account |
-| POST | `/v1/sync/push` | Upload encrypted blob batch `{ blobs: [{id, cipherText, updatedAt, deviceId}] }` |
-| GET | `/v1/sync/pull?since=` | Pull encrypted blobs changed since cursor |
-| POST | `/v1/cloud-search` | Cloud-assisted mode only: plaintext (redacted) query → ranked results |
-| GET | `/v1/account` | Account/profile info |
+The cloud backend's API contract (auth, device pairing, sync push/pull, cloud-assisted search) is entirely v2 scope and now lives in [`recall-v2-cloud-and-distribution.md`](./recall-v2-cloud-and-distribution.md) alongside the phases that implement it. Nothing in v1 calls or depends on it.
 
 ---
 
@@ -517,20 +512,14 @@ The token is the real trust boundary (see threat model §6.6); loopback + Origin
 | Local relational store | SQLite via `better-sqlite3` | Zero-ops, embedded, fast, fine for settings/audit/standup rows. NOTE: stock `better-sqlite3` is unencrypted; if a bespoke encrypted DB is desired beyond the §10 baseline, substitute `better-sqlite3-multiple-ciphers` (SQLCipher). |
 | Local vector store | LanceDB (`vectordb` npm package) | Embedded (no server), file-based, supports vector + metadata filter + FTS hybrid search — ideal for local-first |
 | Local embeddings | Transformers.js running a quantized `all-MiniLM-L6-v2` ONNX model | Pure JS/WASM, no Python dependency, fully offline |
-| Local summarization LLM | Ollama (auto-detected if installed; e.g. `phi3.5` or `llama3.2:3b`) | Free, local, no data leaves device |
-| Cloud-assisted LLM (opt-in only) | Anthropic API (Claude) | Higher-quality summarization when user explicitly opts in |
+| Local summarization LLM | Ollama (auto-detected if installed; e.g. `phi3.5` or `llama3.2:3b`), else the always-available extractive fallback | Free, local, no data leaves device, no LLM installation even required |
 | Process management for Local Agent | Spawned/supervised by VS Code extension via `child_process`; standalone CLI for browser-only use | Avoids requiring a separate installer for the common case |
 | MCP SDK | `@modelcontextprotocol/sdk` (TypeScript), stdio transport | Standard, matches Claude Desktop/Code config conventions |
-| Backend framework | NestJS | Opinionated module structure scales well for AI-assisted scaffolding and keeps service boundaries explicit |
-| Backend relational DB | PostgreSQL (via Prisma) | Mature, supports multi-tenant patterns cleanly |
-| Cloud vector DB (cloud-assisted mode only) | Qdrant (managed or self-hosted) | Good filtering + horizontal scale story |
-| Object storage | S3-compatible (AWS S3 or self-hosted MinIO) | Encrypted blob backups |
-| Queue / jobs (cloud) | Redis + BullMQ | Simple, well-understood, good for summarization worker pool |
-| Client-side encryption | libsodium (`libsodium-wrappers`) | Well-audited primitives for zero-knowledge sync |
+| Client-side encryption | libsodium (`libsodium-wrappers`) | Well-audited primitives for zero-knowledge sync — **v2 dependency only; not installed/used in v1** |
 | Local at-rest protection | OS full-disk encryption (baseline) + secrets/keys in OS keychain (`keytar` / VS Code `SecretStorage`) + optional app-level field encryption (libsodium) for sensitive payloads | Neither LanceDB nor stock SQLite offers transparent encryption; this layered model is what actually delivers SEC-2 (see §7.5, §10). The capability token and sync key material live in the keychain, never in a plaintext config file. |
-| CI/CD | GitHub Actions | Standard; matrix build for extension + backend + agent |
-| Backend deploy (MVP) | Fly.io or Render (containers) | Fast to ship; migrate to Kubernetes only when scale demands it |
-| Backend deploy (scale) | Kubernetes (documented in Section 14, not built until needed) | Future-proofing only |
+| CI/CD | GitHub Actions | Free tier is sufficient at this scale; matrix build for extension + agent |
+
+**Everything cloud/paid is v2 scope, not part of the v1 tech stack**: the Anthropic API, NestJS backend, PostgreSQL, Qdrant, S3-compatible object storage, Redis + BullMQ, and any hosting platform (Fly.io/Render for the MVP tier, Kubernetes for scale) are fully specified in [`recall-v2-cloud-and-distribution.md`](./recall-v2-cloud-and-distribution.md) instead of here, so this table only lists what v1 actually depends on.
 
 ---
 
@@ -541,8 +530,8 @@ The token is the real trust boundary (see threat model §6.6); loopback + Origin
 - SEC-3: The redaction pipeline (Section 5.2) runs before storage AND before embedding generation — a secret must never reach the vector index even transiently.
 - SEC-4: The Local Agent's HTTP/WS server MUST bind to `127.0.0.1` only and MUST reject any non-loopback remote address. Because loopback binding alone does not stop other local processes or in-browser webpages from connecting, SEC-4 is enforced together with SEC-4a.
 - SEC-4a: Every Local Agent request (except `/v1/health`) MUST require a per-install **capability token** (§8.1), compared in constant time, with the token stored in the OS keychain and distributed only via the `0600` discovery file (§6.7). `Origin`/`Host` allowlisting is applied as defense-in-depth, not as the primary control. See the threat model (§6.6).
-- SEC-5: Zero-knowledge sync mode: the server must be architecturally incapable of reading content — encryption keys are never transmitted. This must be verifiable in code review (no code path sends the passphrase or derived key to any network call).
-- SEC-6: Cloud-assisted mode requires its own distinct, explicit opt-in screen, separate from the backup opt-in, explaining that plaintext (post-redaction) content is sent to Anthropic/Qdrant for processing.
+- SEC-5 (**v2 — not applicable until the sync backend is built**): Zero-knowledge sync mode: the server must be architecturally incapable of reading content — encryption keys are never transmitted. This must be verifiable in code review (no code path sends the passphrase or derived key to any network call).
+- SEC-6 (**v2 — not applicable until cloud-assisted search is built**): Cloud-assisted mode requires its own distinct, explicit opt-in screen, separate from the backup opt-in, explaining that plaintext (post-redaction) content is sent to Anthropic/Qdrant for processing.
 - SEC-7: Full export and full delete (FR-27) must be true deletes (including from LanceDB segments and SQLite, and from cloud sync targets if enabled), not soft-deletes, when the user requests deletion.
 - SEC-8: An audit log (local, human-readable) of what was captured each day must be available to the user on demand — "show me everything Recall recorded about me today."
 
@@ -570,7 +559,7 @@ On a debounced trigger (active editor change, new diagnostic, terminal command f
 1. Embed the question.
 2. Retrieve top-k (default 6) memories/lessons.
 3. Construct a prompt (template in Appendix A) instructing the model to answer using only retrieved context, cite which memory each claim came from, and say "I don't have a memory about that" rather than fabricating.
-4. Run via whichever generation provider is configured (Ollama local model preferred default; Anthropic API if cloud-assisted mode is on and configured; extractive fallback — just return the most relevant raw excerpts unsummarized — if no LLM provider is available at all).
+4. Run via whichever generation provider is configured. In v1: Ollama local model preferred default, else the always-available extractive fallback (just return the most relevant raw excerpts unsummarized). The Anthropic API path is v2-only (cloud-assisted mode, see [`recall-v2-cloud-and-distribution.md`](./recall-v2-cloud-and-distribution.md)) and never required.
 
 ### 11.5 Generation jobs (standup / weekly / lessons)
 All three are scheduled jobs (`node-cron` inside the Local Agent) that gather structured input (event lists) and call the same pluggable generation provider abstraction as 11.4, with dedicated prompt templates (Appendix A). Must always produce a usable draft even with the extractive fallback (e.g., a templated bullet list of event titles) so the feature never silently fails when no LLM is configured.
@@ -646,7 +635,7 @@ recall/
         generation/
           provider.ts
           ollamaProvider.ts
-          anthropicProvider.ts
+          anthropicProvider.ts   # v2 stub only — real implementation requires a paid Anthropic API key
           extractiveFallbackProvider.ts
           prompts/
         retrieval/
@@ -664,8 +653,8 @@ recall/
           syncClient.ts
         cli.ts                 # `recall-agent start|mcp|status`
       test/
-    backend/
-      package.json
+    backend/                  # v1: empty stub only — no server ever runs, no hosting cost.
+      package.json             # Real implementation is v2 scope (recall-v2-cloud-and-distribution.md, Phases 8-9).
       src/
         gateway/
         auth-service/
@@ -675,18 +664,19 @@ recall/
         prisma/
           schema.prisma
       test/
-    web-dashboard/             # stubbed only, Section 13 Phase 10
+    web-dashboard/             # stubbed only, Section 13 Phase 10 (local-only, free, still in v1 scope)
   packages/
     shared-types/              # MemoryEvent, Lesson, DailyStandup, etc.
     redaction-rules/
     prompt-templates/
     ui-kit/                    # shared webview components (sidebar + future dashboard)
-  infra/
+  infra/                       # v2 scope only — Docker/k8s/terraform for the cloud backend; not used in v1.
     docker/
-    k8s/                       # not used until Phase 12 scale work
+    k8s/                       # not used until Phase 12 scale work (recall-v2-cloud-and-distribution.md)
     terraform/
   docs/
-    recall-prd-and-architecture.md   # this document
+    recall-prd-and-architecture.md   # this document — v1 scope
+    recall-v2-cloud-and-distribution.md   # v2 scope: cloud backend, cloud-assisted search, paid distribution
 ```
 
 ---
@@ -748,31 +738,26 @@ Work through phases in order. Each phase lists explicit tasks and a Definition o
 - Add `recall-agent mcp` CLI entry; document the Claude Desktop / Claude Code config snippet needed to register it.
 - **DoD:** Claude Desktop (or Claude Code) configured to use the local MCP server can successfully call `search_memory` and `get_daily_standup` and receive correct, real data from a seeded test database.
 
-### Phase 8 — Cloud backend: auth + zero-knowledge sync
-- Scaffold NestJS backend with `auth-service` (email + GitHub OAuth, device pairing, JWT) and `sync-service` (push/pull encrypted blobs) modules; Prisma schema with `tenant_id` on every table from day one.
-- Implement client-side encryption module (`sync/encryptionClient.ts`) using libsodium; Local Agent setting to enable "Encrypted Backup & Multi-Device Merge."
-- Implement the merge engine per §6.4.1: set-union of immutable `MemoryEvent`s by `id`; last-writer-wins on `rev` (ties by `deviceId`) for mutable records; tombstone propagation for deletes, with tombstone GC once all devices' cursors pass them.
-- **DoD:** Two separate local Local Agent instances (simulating two devices) under the same account converge to the same decrypted memory set after push/pull cycles; a record edited concurrently on both devices resolves deterministically to the higher-`rev` version; a delete on one device removes it on the other and does not resurrect on a later pull; server-side inspection of stored blobs confirms ciphertext only (automated test asserts no plaintext substrings from seeded fixtures appear in the DB).
+### Phase 8 — Cloud backend: auth + zero-knowledge sync — **DEFERRED TO v2**
+Requires paid cloud hosting (Postgres, a container platform). Fully specified in [`recall-v2-cloud-and-distribution.md`](./recall-v2-cloud-and-distribution.md#phase-8) for later pickup. Not part of the v1 build — do not start this phase.
 
-### Phase 9 — Cloud-assisted search (opt-in tier 2)
-- Implement `ingestion-service` (BullMQ workers) that accepts redacted plaintext events (only when this mode is explicitly enabled), embeds and stores in Qdrant (collections keyed by `embeddingModel`/`embeddingDim`, re-embedding from `embeddingText` on any model mismatch — §6.4.1/§7.6), and can call the Anthropic API for higher-quality `Lesson`/summary generation.
-- Implement `/v1/cloud-search`.
-- **DoD:** Enabling cloud-assisted mode shows the required distinct consent screen (SEC-6); disabling it stops new uploads and provides a way to delete previously uploaded plaintext-derived data from Qdrant/Postgres.
+### Phase 9 — Cloud-assisted search (opt-in tier 2) — **DEFERRED TO v2**
+Requires a paid Anthropic API key and hosted Qdrant. Fully specified in [`recall-v2-cloud-and-distribution.md`](./recall-v2-cloud-and-distribution.md#phase-9) for later pickup. Not part of the v1 build — do not start this phase.
 
 ### Phase 10 — Skill evolution & dashboard (stub-level in v1)
 - Implement `skillProfile.ts` job and `/v1/skill-profile`.
 - Build a minimal `web-dashboard` (can be a local-only static page served by the Local Agent, no cloud requirement) visualizing tag frequency trends over time.
 - **DoD:** Dashboard renders real tag-frequency data from a seeded local dataset.
 
-### Phase 11 — Packaging & distribution
-- VS Code Marketplace packaging (`vsce package`), with the Local Agent bundled or auto-downloaded on first activation.
-- Chrome Web Store + Firefox Add-ons packaging for the browser extension.
+### Phase 11 — Packaging & distribution (v1: free channels only)
+- VS Code Marketplace packaging (`vsce package`) — **free**: publishing to the Marketplace has no listing fee, only a free Microsoft/Azure DevOps publisher account. With the Local Agent bundled or auto-downloaded on first activation.
+- Firefox Add-ons packaging for the browser extension — **free** to publish. Also ship an unpacked/sideloadable build (already produced by this repo's `apps/browser-extension` build) so Chrome/Edge users can load it manually without any store submission.
+- **Chrome Web Store submission is explicitly out of v1 scope** because it carries a one-time developer registration fee (~$5) — see [`recall-v2-cloud-and-distribution.md`](./recall-v2-cloud-and-distribution.md#chrome-web-store) for that step whenever the project is ready to spend it. Nothing about the extension's code depends on this; it's purely a distribution-channel decision.
 - Local Agent distributed as a small npm-installed binary or auto-managed by the VS Code extension; document manual install path for browser-extension-only users.
-- **DoD:** A clean machine with neither component installed can install the VS Code extension from a `.vsix`, have it transparently provision the Local Agent, and reach "first captured memory" with no manual terminal steps.
+- **DoD:** A clean machine with neither component installed can install the VS Code extension from a `.vsix`, have it transparently provision the Local Agent, and reach "first captured memory" with no manual terminal steps and no money spent.
 
-### Phase 12 — Scale-out infra (future, do not build until real load demands it)
-- Containerize backend services; move from Fly.io/Render to Kubernetes with HPA on the worker-summarization deployment; managed Postgres (RDS/Neon), managed Redis, Qdrant Cloud.
-- This phase is documented here only so the architecture isn't blocked later — no tasks here are in scope for the initial build.
+### Phase 12 — Scale-out infra — **DEFERRED TO v2**
+Only relevant once the v2 cloud backend (Phase 8/9) is under real load. Fully specified in [`recall-v2-cloud-and-distribution.md`](./recall-v2-cloud-and-distribution.md#phase-12). No tasks here are in scope for v1.
 
 ---
 
@@ -782,10 +767,9 @@ Work through phases in order. Each phase lists explicit tasks and a Definition o
 - **Integration tests:** Supertest against the Local Agent's HTTP API; spin up an ephemeral SQLite/LanceDB per test run.
 - **Extension E2E:** `@vscode/test-electron` driving the Extension Development Host for capture-to-sidebar flows.
 - **Browser extension E2E:** Playwright with a loaded unpacked extension, asserting allowlist behavior and pause/resume.
-- **Backend contract tests:** OpenAPI schema validation on gateway responses; Prisma migration tests in CI against a throwaway Postgres container.
 - **Privacy regression tests (high priority):** a dedicated suite that feeds known secret-shaped fixtures through the full capture→redaction→storage→embedding pipeline and asserts the secret never appears in any persisted artifact (SQLite rows, LanceDB rows, embedding input text, audit log).
 - **Local-API security tests:** assert that requests without a valid capability token are rejected (SEC-4a), that non-loopback addresses are refused (SEC-4), and that a deleted record leaves no recoverable trace after compaction (SEC-7, NFR-RET-2).
-- **Sync merge tests:** concurrent-edit convergence (higher `rev` wins), delete/tombstone propagation with no resurrection, and ciphertext-only server storage (Phase 8 DoD).
+- **v2 only (not applicable until the cloud backend is built — see `recall-v2-cloud-and-distribution.md`):** backend contract tests (OpenAPI schema validation, Prisma migration tests against a throwaway Postgres container) and sync merge tests (concurrent-edit convergence, delete/tombstone propagation, ciphertext-only server storage).
 
 ---
 
