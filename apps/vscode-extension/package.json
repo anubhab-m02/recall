@@ -1,5 +1,5 @@
 {
-  "name": "@recall/vscode-extension",
+  "name": "recall-vscode-extension",
   "displayName": "Recall",
   "description": "Personal, local-first developer memory — silent capture, in-context resurfacing, standups, and MCP for AI agents.",
   "version": "0.1.0",
