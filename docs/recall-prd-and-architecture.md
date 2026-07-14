@@ -1,7 +1,7 @@
 # Recall — Personal Developer Memory System
 ## Product Requirements Document & Technical Architecture Specification
 
-**Version:** 1.3
+**Version:** 1.4
 **Status:** Ready for implementation
 **Audience:** This document is written to be handed directly to an autonomous AI coding assistant (e.g. Claude Code) as the source of truth for implementation. Every section that contains a "MUST / SHALL" is a hard requirement. Sections marked "SHOULD" are strong defaults that can be revisited. Sections marked "Future / Out of scope for v1" must not be built in the initial implementation passes.
 
@@ -12,6 +12,7 @@
 | 1.1 | 2026-07-01 | Architecture-review pass before implementation. Reconciled at-rest encryption with the actual storage stack (§9, §7.5, §10); added a **local capability token** for the loopback API and an explicit **threat model** (§6.6, §8.1, §10); specified sync **merge semantics (LWW via `rev`), tombstones, and local/cloud embedding-model parity** (§6.4, §7, Phases 8–9); added **schema + embedding versioning/migration** (§7.6); added an **agent lifecycle / singleton** model (§6.7); consolidated **non-functional requirements & a daemon resource budget** (§5A); added MV3 durable-queue and storage-retention requirements (§13, §7.5); annotated MCP tool schemas as illustrative shorthand (§8.2). |
 | 1.2 | 2026-07-01 | **v1 is now scoped to be zero-cost to build, host, and distribute.** Everything that requires a paid cloud service (backend hosting, managed Postgres/Redis/Qdrant, the Anthropic API) or a paid distribution channel (Chrome Web Store's one-time developer fee) is moved out of the v1 build entirely and captured in a companion document, [`recall-v2-cloud-and-distribution.md`](./recall-v2-cloud-and-distribution.md), to be picked up as v2. v1 remains fully functional without any of it — local capture, search, generation (via free local Ollama or the always-available extractive fallback), and MCP all work with zero network calls and zero recurring cost. Sections below are annotated inline wherever they referenced deferred scope; no local-only requirement changed. |
 | 1.3 | 2026-07-01 | **UX & discoverability pass, driven by dogfooding the packaged `.vsix`** rather than by new functional scope. Real usage of the installed VS Code extension surfaced that its best features (Ask Recall, Daily Standup, Weekly Summary) were Command-Palette-only and effectively undiscoverable, that passive capture gave zero visible confirmation anything was happening, and that the Marketplace listing had no README, no icon field, and only a generic placeholder activity-bar icon. Added **Phase 2.5 — UX & discoverability polish (retroactive)** (§13) and **FR-30/FR-31/FR-32** (§4) to make this an explicit, re-checkable requirement rather than an implicit assumption. No architecture, data model, or API contract changed. |
+| 1.4 | 2026-07-01 | **Dead-scaffolding cleanup pass**, found by a repo-wide over-engineering audit. Removed `apps/backend/`, `infra/`, `packages/ui-kit/`, and six zero-import stub files (`storage/schema.ts`, `server/ws.ts`, `generation/anthropicProvider.ts`, `generation/prompts/`, `sync/encryptionClient.ts`, `sync/syncClient.ts`) — all v2-scope placeholders or superseded stubs that were carrying zero functional value while still running through CI on every push. All are recoverable from git history; §12 now marks each as "removed, recreate at Phase N" instead of listing it as present-but-empty. No v1-scope functionality changed. |
 
 ---
 
@@ -622,14 +623,18 @@ recall/
       src/
         server/
           http.ts
-          ws.ts
+          # ws.ts (/v1/stream) — removed (v1.3 cleanup pass); zero imports,
+          # was never wired to a route. Recreate when the WS push channel
+          # is actually built.
         mcp/
           server.ts
           tools.ts
         storage/
           sqlite.ts
           lancedb.ts
-          schema.ts
+          # schema.ts — removed (v1.3 cleanup pass); sqlite.ts/lancedb.ts
+          # implement schemaVersion inline, this delegation stub had zero
+          # imports.
         redaction/
           pipeline.ts
           rules.ts
@@ -639,9 +644,12 @@ recall/
         generation/
           provider.ts
           ollamaProvider.ts
-          anthropicProvider.ts   # v2 stub only — real implementation requires a paid Anthropic API key
+          # anthropicProvider.ts — removed (v1.3 cleanup pass); v2 stub
+          # with zero imports. Recreate at Phase 9 when a paid Anthropic
+          # API key is actually in scope.
           extractiveFallbackProvider.ts
-          prompts/
+          # prompts/ — removed (v1.3 cleanup pass); superseded by
+          # @recall/prompt-templates, which jobs import directly.
         retrieval/
           hybridSearch.ts
           ragAsk.ts
@@ -652,31 +660,26 @@ recall/
           dailyStandup.ts
           weeklySummary.ts
           skillProfile.ts
-        sync/
-          encryptionClient.ts
-          syncClient.ts
+        # sync/ — removed (v1.3 cleanup pass); encryptionClient.ts and
+        # syncClient.ts were zero-import Phase 8/9 stubs. Recreate when
+        # cloud sync (recall-v2-cloud-and-distribution.md) actually starts.
         cli.ts                 # `recall-agent start|mcp|status`
       test/
-    backend/                  # v1: empty stub only — no server ever runs, no hosting cost.
-      package.json             # Real implementation is v2 scope (recall-v2-cloud-and-distribution.md, Phases 8-9).
-      src/
-        gateway/
-        auth-service/
-        sync-service/
-        ingestion-service/
-        worker-summarization/
-        prisma/
-          schema.prisma
-      test/
+    # backend/ — removed (v1.3 cleanup pass). Was five `export {}` stubs
+    # plus a zero-model Prisma schema, running through CI for no functional
+    # value. Fully recoverable from git history; recreate when Phase 8
+    # (recall-v2-cloud-and-distribution.md) actually starts.
     web-dashboard/             # stubbed only, Section 13 Phase 10 (local-only, free, still in v1 scope)
   packages/
     shared-types/              # MemoryEvent, Lesson, DailyStandup, etc.
     redaction-rules/
     prompt-templates/
-    ui-kit/                    # shared webview components (sidebar + future dashboard)
-  infra/                       # v2 scope only — Docker/k8s/terraform for the cloud backend; not used in v1.
-    docker/
-    k8s/                       # not used until Phase 12 scale work (recall-v2-cloud-and-distribution.md)
+    # ui-kit/ — removed (v1.3 cleanup pass). Was a single unused version-
+    # string export with zero consumers. Recreate once a real shared-
+    # webview-component need shows up.
+  # infra/ — removed (v1.3 cleanup pass). Was empty .gitkeep placeholders
+  # for a deployment topology that doesn't exist yet. Recreate at Phase 12
+  # (recall-v2-cloud-and-distribution.md).
     terraform/
   docs/
     recall-prd-and-architecture.md   # this document — v1 scope
