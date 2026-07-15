@@ -10,8 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@recall/shared-types": "workspace:*",
-    "@recall/ui-kit": "workspace:*"
+    "@recall/shared-types": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.2",

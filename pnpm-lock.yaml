@@ -33,19 +33,6 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.0)
 
-  apps/backend:
-    dependencies:
-      '@recall/shared-types':
-        specifier: workspace:*
-        version: link:../../packages/shared-types
-    devDependencies:
-      typescript:
-        specifier: ^5.7.2
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.20.0)
-
   apps/browser-extension:
     dependencies:
       '@recall/shared-types':
@@ -159,9 +146,6 @@ importers:
       '@recall/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
-      '@recall/ui-kit':
-        specifier: workspace:*
-        version: link:../../packages/ui-kit
     devDependencies:
       typescript:
         specifier: ^5.7.2
@@ -193,15 +177,6 @@ importers:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
-    devDependencies:
-      typescript:
-        specifier: ^5.7.2
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.20.0)
-
-  packages/ui-kit:
     devDependencies:
       typescript:
         specifier: ^5.7.2
@@ -826,7 +801,6 @@ packages:
   '@lancedb/lancedb@0.30.0':
     resolution: {integrity: sha512-d0FoEL6cthqgsulqAc7fck6kRXrSRGMTqlKYbhSGSazHU6vB2GEpD737Mu0HZd7fMyBUdhR9sD1W2C9uQZ5p0Q==}
     engines: {node: '>= 18'}
-    cpu: [x64, arm64]
     os: [darwin, linux, win32]
     peerDependencies:
       apache-arrow: '>=15.0.0 <=18.1.0'
